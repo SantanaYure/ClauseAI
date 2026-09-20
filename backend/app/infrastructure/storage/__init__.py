@@ -1,0 +1,1 @@
+"""Future binary storage adapters."""
