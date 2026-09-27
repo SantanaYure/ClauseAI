@@ -1,6 +1,6 @@
 # D — Architecture Decision Records
 
-Status permitido: `Accepted`, `Proposed`, `Superseded`. ADRs registram decisões técnicas, não regras de seguros.
+Status permitido: `Accepted`, `Proposed`, `Superseded`. ADRs registram decisões técnicas; regras de seguros ficam na [base de conhecimento D&O](../domain/DO_KNOWLEDGE_BASE.md).
 
 ## ADR-001 — Monólito modular
 
@@ -53,14 +53,14 @@ Status permitido: `Accepted`, `Proposed`, `Superseded`. ADRs registram decisões
 - **Contexto/problema:** documentos podem ser PDF/imagem e exigem compreensão multimodal.
 - **Decisão:** Gemini 3.5 Flash Lite para extração estruturada, sujeito à confirmação de disponibilidade/nome.
 - **Alternativas:** OCR + regras; outro LLM multimodal.
-- **Consequências:** reduz pipeline inicial; exige schema, evidências e testes de hallucination.
+- **Consequências:** reduz pipeline inicial; exige schema, evidências e testes de hallucination. Complementado pelo ADR-019 (leitura nativa + OCR).
 - **Riscos:** saída inconsistente e limites de contexto; retries limitados e golden datasets.
 
 ## ADR-007 — Groq/GPT-OSS-120B para comparação
 
 - **Status:** Accepted
 - **Contexto/problema:** interpretação de texto requer modelo separado da extração.
-- **Decisão:** Groq hospedando GPT-OSS-120B para semântica e explicação, sujeito a validação operacional.
+- **Decisão:** Groq hospedando GPT-OSS-120B para avaliação por conceito e resumo executivo, sujeito a validação operacional (ver ADR-018).
 - **Alternativas:** usar Gemini para tudo; comparação apenas por regras.
 - **Consequências:** separa funções e permite otimizar custo/latência; adiciona integração externa.
 - **Riscos:** interpretação sem base; enviar somente fatos/evidências e validar schema.
@@ -74,11 +74,11 @@ Status permitido: `Accepted`, `Proposed`, `Superseded`. ADRs registram decisões
 - **Consequências:** testabilidade e migração; evolução de schema requer disciplina.
 - **Riscos:** falso senso de precisão; preservar incerteza e `confidence` não científica.
 
-## ADR-009 — Comparação determinística + semântica
+## ADR-009 — Comparação determinística + avaliação por IA
 
 - **Status:** Accepted
 - **Contexto/problema:** LLM não deve ser fonte única de fatos.
-- **Decisão:** backend gera comparação factual; IA interpreta depois.
+- **Decisão:** backend gera comparação factual; IA avalia depois dentro de escalas fechadas; backend calcula a pontuação (ADR-018).
 - **Alternativas:** LLM compara PDFs diretamente; regras somente.
 - **Consequências:** auditabilidade maior e resultados reproduzíveis; pipeline em duas fases.
 - **Riscos:** chaves de matching incompletas; marcar `UNKNOWN`/`PENDING_BUSINESS_VALIDATION`.
@@ -145,3 +145,39 @@ Status permitido: `Accepted`, `Proposed`, `Superseded`. ADRs registram decisões
 - **Alternativas:** confiar em exactly-once; ignorar duplicatas.
 - **Consequências:** reprocessamento seguro; exige transações/controle de concorrência.
 - **Riscos:** marcador e efeito divergirem; usar operação atômica quando possível e testes de crash.
+
+## ADR-017 — Base de conhecimento D&O versionada
+
+- **Status:** Accepted
+- **Contexto/problema:** o dicionário D&O, a matriz de pesos e os prompts do agente comparador são a base do produto e mudam com a validação da equipe de seguros.
+- **Decisão:** manter os arquivos-fonte em `docs/domain/sources/`, consolidá-los em `DO_KNOWLEDGE_BASE.md` e carregá-los por seed versionado (`knowledge_base_version`) atrás da porta `ConceptCatalog`. Prompts leem o catálogo; não o duplicam.
+- **Alternativas:** conceitos e pesos embutidos em prompts; constantes no código.
+- **Consequências:** regras auditáveis e reproduzíveis por versão; exige comando de seed e testes de consistência entre fonte e catálogo.
+- **Riscos:** fonte e catálogo divergirem; teste compara contagem de conceitos, pesos e total 207.
+
+## ADR-018 — Pontuação ponderada determinística com avaliação por IA
+
+- **Status:** Accepted
+- **Contexto/problema:** o desafio pede apoio à decisão e as bases definem pesos, Resultado-base, Fator de Ajuste, scores e perfis; LLMs erram cálculos e não são reproduzíveis.
+- **Decisão:** a IA escolhe Resultado-base e Fator de Ajuste em escalas fechadas, com justificativa e evidência; o `ScoringService` do domínio calcula pontos, scores, completude, pareceres e perfis com `Decimal`. Substitui a restrição anterior de “sem pontuação” da SPEC-008.
+- **Alternativas:** LLM calcula tudo; comparação apenas factual sem pontuação.
+- **Consequências:** decisão explicável e reproduzível; dois pontos de validação (schema da IA e regras do domínio).
+- **Riscos:** score lido como verdade absoluta; mitigado por Índice de Completude, decisão `CONDITIONED`, separação entre análise e recomendação e “Consulte seu corretor de seguros.”
+
+## ADR-019 — Leitura nativa de PDF com OCR multimodal
+
+- **Status:** Accepted
+- **Contexto/problema:** o desafio exige PDF e imagem; os prompts exigem leitura nativa quando houver camada de texto e OCR quando não houver, com confiança por evidência.
+- **Decisão:** biblioteca de PDF na infraestrutura para texto nativo; Gemini multimodal como OCR para PDF digitalizado e imagem; porta `PdfTextReader` permite acrescentar OCR dedicado (Tesseract ou serviço gerenciado) se os golden datasets exigirem.
+- **Alternativas:** apenas multimodal; OCR dedicado desde o início.
+- **Consequências:** menos erro em PDFs pesquisáveis e rastreabilidade do método de extração; mais um adapter.
+- **Riscos:** divergência entre texto nativo e leitura do modelo; preservar ambos e marcar conflito.
+
+## ADR-020 — Agentes especializados como serviços do monólito
+
+- **Status:** Accepted
+- **Contexto/problema:** o desafio sugere agentes de recepção, OCR/extração, identificação de cláusulas, estruturação, comparação e relatório.
+- **Decisão:** cada agente é um serviço de aplicação com handler, prompt versionado e contrato próprio, orquestrado pelo Event Bus interno (ver arquitetura, seção 3).
+- **Alternativas:** framework multiagente externo; um único prompt monolítico.
+- **Consequências:** atende à sugestão do desafio sem operar processos separados; responsabilidades testáveis isoladamente.
+- **Riscos:** acoplamento entre agentes; comunicação só por eventos e DTOs.

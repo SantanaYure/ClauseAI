@@ -2,6 +2,8 @@
 
 Sequência recomendada para uma pessoa. Cada fase só avança quando sua definição de pronto é verificável. “Mockável” indica o que não deve bloquear o desenvolvimento; “seguros” indica decisões que não devem ser inventadas.
 
+**Prazo do Projeto Final:** 06/10/2026, 23h59. Se o tempo apertar, priorizar o fluxo demonstrável ponta a ponta (upload → extração → normalização → comparação ponderada → resumo) sobre recursos opcionais: o desafio valoriza uma solução simples e tecnicamente consistente.
+
 ## Fase 1 — Fundação
 
 - **Objetivo:** preparar repositório, convenções, ambientes e qualidade mínima.
@@ -18,13 +20,13 @@ Sequência recomendada para uma pessoa. Cada fase só avança quando sua defini�
 - **Entregável:** esta documentação revisada, schemas, catálogo de erros e perguntas abertas.
 - **Definition of Done:** cada feature tem spec, critérios e teste planejado; decisões relevantes têm ADR.
 - **Pode ser mockado:** exemplos de apólice e evidências.
-- **Equipe de seguros:** validar vocabulário, campos prioritários e limites de interpretação.
+- **Equipe de seguros:** dicionário, pesos e prompts já entregues (`docs/domain/sources/`); validar apenas os pontos pendentes da seção 10 da base de conhecimento.
 
 ## Fase 3 — Contratos e mocks
 
 - **Objetivo:** testar fluxo sem dependências externas.
 - **Dependências:** Fase 2.
-- **Entregável:** interfaces, fakes de repositories/Storage/AI/Event Bus, fixtures e schemas de API.
+- **Entregável:** interfaces, fakes de repositories/Storage/AI/Event Bus, seed da base de conhecimento, fixtures e schemas de API.
 - **Definition of Done:** casos de uso principais passam com fakes e falhas são classificadas.
 - **Pode ser mockado:** Gemini, Groq, Firestore, Storage e relógio.
 - **Equipe de seguros:** fornecer 2–5 documentos anonimizados e expected fields.
@@ -60,16 +62,16 @@ Sequência recomendada para uma pessoa. Cada fase só avança quando sua defini�
 
 - **Objetivo:** obter JSON rastreável de documentos reais.
 - **Dependências:** Fases 3, 5 e 6; acesso aos providers.
-- **Entregável:** AI Orchestrator, Gemini adapter, prompts versionados, schema v1, retries e `ExtractionResult`.
-- **Definition of Done:** golden fixtures produzem payload validado ou falha explícita; injection e ausência cobertas.
+- **Entregável:** AI Orchestrator, leitor de PDF nativo, Gemini adapter (OCR multimodal), `P-INTAKE-001`, `P-EXTRACT-001`, `P-NORMALIZE-001`, schema v1, retries, `ExtractionResult`, `Evidence` e `ConceptOccurrence`.
+- **Definition of Done:** golden fixtures produzem payload validado ou falha explícita; PDF pesquisável, PDF digitalizado e imagem cobertos; injection, ausência e Condições Gerais isoladas cobertas; os 31 conceitos ponderados são pesquisados.
 - **Pode ser mockado:** Gemini em unit/integration; respostas reais só em testes controlados.
-- **Equipe de seguros:** taxonomia inicial e revisão de campos/trechos.
+- **Equipe de seguros:** revisar variantes de DO-036 a DO-044.
 
 ## Fase 8 — Persistência estruturada
 
 - **Objetivo:** transformar extração validada em `Policy` consultável.
 - **Dependências:** Fase 7.
-- **Entregável:** `PolicyStored`, repository, `GET /policies`, evidências e idempotência.
+- **Entregável:** `PolicyStored`, repository, `GET /policies`, `GET /concepts`, `GET /concepts/{id}/occurrences`, `GET /search`, evidências versionadas e idempotência.
 - **Definition of Done:** extração repetida não duplica; policy pronta é consultável e auditável.
 - **Pode ser mockado:** Firestore emulator.
 - **Equipe de seguros:** validar mapeamento de campos e estados de ausência.
@@ -81,22 +83,22 @@ Sequência recomendada para uma pessoa. Cada fase só avança quando sua defini�
 - **Entregável:** `POST /comparisons`, `ComparisonService`, itens e status parcial.
 - **Definition of Done:** tabela de casos cobre valores, listas, datas, nulos e incompatibilidade; idempotência passa.
 - **Pode ser mockado:** policies fixture e Firestore.
-- **Equipe de seguros:** confirmar chaves de correspondência e unidades; sem isso usar `UNKNOWN`.
+- **Equipe de seguros:** nenhuma; a chave de correspondência é o `concept_id`.
 
-## Fase 10 — Comparação semântica
+## Fase 10 — Avaliação, pontuação e decisão
 
-- **Objetivo:** explicar diferenças sem ultrapassar evidências.
-- **Dependências:** Fase 9, acesso Groq e revisão de prompt.
-- **Entregável:** Groq adapter, prompt semântico, schema de interpretação, disclaimer e falha parcial.
-- **Definition of Done:** resultado semântico referencia itens, separa fatos/interpretação e rejeita saída inválida.
+- **Objetivo:** avaliar conceitos, pontuar e recomendar de forma condicionada sem ultrapassar evidências.
+- **Dependências:** Fase 9, acesso Groq e revisão de prompts.
+- **Entregável:** Groq adapter, `P-ASSESS-001`, `ScoringService`, perfis de risco, `P-EXECUTIVE-001`, `QualityGate`, `POST /queries` e falha parcial.
+- **Definition of Done:** avaliações fora da escala são rejeitadas; fórmulas, pareceres e perfis passam na tabela de casos (incluindo total 207 e o exemplo 77,6 % × 79,4 %); resumo não cria números; “Consulte seu corretor de seguros.” aparece nas limitações.
 - **Pode ser mockado:** Groq para maioria dos testes; smoke test real controlado.
-- **Equipe de seguros:** revisar linguagem, perguntas pendentes e risco de interpretação.
+- **Equipe de seguros:** confirmar `profile_multiplier`, `close_score_threshold` e `min_completeness`.
 
 ## Fase 11 — Frontend
 
 - **Objetivo:** entregar fluxo completo para usuário.
 - **Dependências:** endpoints estáveis das Fases 5, 8–10.
-- **Entregável:** upload, lista/status, detalhe de policy, seleção de duas, comparação e erros.
+- **Entregável:** upload, lista/status, detalhe de policy com evidências, consulta por conceito, seleção de duas, filtro por importância, seletor de perfil, tabela ponderada, scores, resumo executivo, alertas e erros.
 - **Definition of Done:** fluxo navegável com fixtures; estados loading/partial/failed acessíveis.
 - **Pode ser mockado:** API com fixtures/MSW.
 - **Equipe de seguros:** validar legibilidade e ordem de informações.
@@ -128,12 +130,21 @@ Sequência recomendada para uma pessoa. Cada fase só avança quando sua defini�
 - **Pode ser mockado:** cenários de falha para a apresentação.
 - **Equipe de seguros:** aceite do escopo acadêmico e disclaimer final.
 
+## Fase 15 — Entregáveis do Projeto Final
+
+- **Objetivo:** cumprir os requisitos de entrega do desafio.
+- **Dependências:** Fase 14.
+- **Entregável:** repositório GitHub público; README com descrição, instalação, execução, tecnologias, integrantes e licença MIT; ZIP do código; em `Projeto_Final_Artefatos/`: relatório técnico em PDF (arquitetura, tecnologias, agentes, fluxo, justificativas, limitações e evolução futura), `InsurMinds_Projeto_Final.pptx` e `InsurMinds_Projeto_Final.mp4` (até 5 minutos: problema, arquitetura, funcionamento e resultados), com fontes de documentos citadas.
+- **Definition of Done:** checklist “entrega completa” do enunciado atendido até 06/10/2026, 23h59.
+- **Pode ser mockado:** nada.
+- **Equipe de seguros:** revisão final do relatório.
+
 ## Priorização de backlog futuro
 
 1. fila durável/executor externo se o volume exigir;
 2. autenticação e autorização;
 3. revisão humana e correção assistida;
 4. múltiplas apólices/documento e versionamento;
-5. taxonomia de D&O validada e regras de impacto;
+5. comparação de mais de duas apólices e edição de pesos pelo usuário com trilha de auditoria;
 6. exportação e auditoria avançada;
 7. circuit breaker, tracing distribuído e escala horizontal.

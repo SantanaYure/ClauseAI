@@ -10,11 +10,43 @@ O Firestore armazena metadados e estruturas consultáveis. O PDF/imagem original
 documents/{document_id}
 documents/{document_id}/processing_jobs/{processing_id}
 documents/{document_id}/extraction_results/{extraction_result_id}
+documents/{document_id}/evidences/{evidence_id}
 policies/{policy_id}
+policies/{policy_id}/concept_occurrences/{occurrence_id}
+knowledge_base/{version}/concepts/{concept_id}
+knowledge_base/{version}/profiles/{profile_id}
 comparisons/{comparison_id}
 comparisons/{comparison_id}/items/{item_id}
+comparisons/{comparison_id}/assessments/{policy_id}_{concept_id}
+comparisons/{comparison_id}/scores/{policy_id}_{profile}
 processed_events/{event_id}
 ```
+
+As entidades mínimas do documento 3 (prompt 5) mapeiam assim: **Documento** → `documents`; **Evidência** → `evidences`; **Conceito** → `knowledge_base/.../concepts`; **Resultado por apólice** → `assessments`; **Comparação** → `items`; **Decisão** → `scores` e `executive_summary` em `comparisons`.
+
+### `knowledge_base`
+
+Carregada a partir de [`domain/DO_KNOWLEDGE_BASE.md`](../domain/DO_KNOWLEDGE_BASE.md) e dos arquivos em `domain/sources/` por um comando de seed versionado. Cada versão é imutável; uma comparação grava a `knowledge_base_version` usada. Conceito:
+
+```json
+{
+  "concept_id": "DO-036",
+  "domain": "Limites",
+  "base_concept": "LMG – Limite Máximo de Garantia",
+  "variants": ["LMG", "limite máximo de garantia"],
+  "importance": "CRITICAL",
+  "technical_weight": "10",
+  "weight_justification": "Capacidade financeira máxima da apólice.",
+  "evaluation_criterion": "valor, moeda, agregado/por evento, sublimites, erosão, franquia",
+  "related_concepts": [],
+  "active": true,
+  "pending_business_validation": ["variants"]
+}
+```
+
+### `evidences`
+
+`evidence_id`, `document_id`, `page`, `section_ref`, `clause_ref`, `literal_text`, `content_kind`, `extraction_method`, `confidence`, `low_confidence`, `version`. Registros não são sobrescritos; correções criam nova versão.
 
 ### `documents/{document_id}`
 
@@ -23,6 +55,12 @@ processed_events/{event_id}
   "document_id": "doc_01",
   "original_filename": "apolice.pdf",
   "content_type": "application/pdf",
+  "file_kind": "SEARCHABLE_PDF",
+  "document_type": "POLICY",
+  "insurer": "Não identificado",
+  "version": null,
+  "ocr_required": false,
+  "extraction_quality": "HIGH",
   "size_bytes": 345678,
   "checksum_sha256": "...",
   "storage_key": "documents/doc_01/original.pdf",
@@ -67,7 +105,7 @@ Guarda `raw_response` apenas com política de acesso restrita, `parsed_payload`,
 
 ### `comparisons/{comparison_id}`
 
-Contém os dois IDs, status, `deterministic_result`, `semantic_result`, modelo/prompt semântico, timestamps, correlação e falha. Itens podem ser subcoleção para leitura paginada; no MVP, também é aceitável um array limitado se o tamanho máximo for validado.
+Contém os dois IDs, `selected_profile`, `knowledge_base_version`, status, `deterministic_result`, `executive_summary`, `quality_gate`, modelos/prompts usados, timestamps, correlação e falha. Itens, avaliações e scores ficam em subcoleções para leitura paginada; no MVP, também é aceitável um array limitado se o tamanho máximo for validado. Pesos ajustados por perfil ficam em `scores`, junto do motivo do ajuste, sem alterar `knowledge_base`.
 
 ### `processed_events`
 
@@ -76,7 +114,8 @@ Chave por `event_id`, com `handler_name`, `processed_at`, `entity_id` e resultad
 ## 2. Índices e consultas
 
 - `documents`: `status` + `uploaded_at desc`.
-- `policies`: `status` + `updated_at desc`; filtro por `insurer` somente se necessário.
+- `policies`: `status` + `updated_at desc`; `insurer` + `updated_at desc`.
+- `concept_occurrences` (collection group): `concept_id` + `contract_status`.
 - `comparisons`: `created_at desc` e, futuramente, `policy_a_id`/`policy_b_id`.
 - Não indexar texto integral de cláusulas no MVP.
 
@@ -162,8 +201,10 @@ Estados públicos: `UPLOADED`, `PROCESSING`, `EXTRACTING`, `VALIDATING`, `COMPLE
 **Request:**
 
 ```json
-{"policy_a_id":"pol_01","policy_b_id":"pol_02"}
+{"policy_a_id":"pol_01","policy_b_id":"pol_02","selected_profile":"FINANCIAL"}
 ```
+
+`selected_profile` é opcional; todos os perfis são calculados e o selecionado é destacado.
 
 **Response `202`:**
 
@@ -177,20 +218,47 @@ Estados públicos: `UPLOADED`, `PROCESSING`, `EXTRACTING`, `VALIDATING`, `COMPLE
 
 **Objetivo:** consultar status e resultado parcial/final.
 
+**Query:** `profile?` (`BASE`, `FINANCIAL`, `INTERNATIONAL`, `REGULATORY`, `TAIL`, `LABOR_REPUTATIONAL`), `importance?`.
+
 **Response `200`:**
 
 ```json
 {
   "comparison_id":"cmp_01",
   "status":"COMPLETED",
+  "knowledge_base_version":"2026.09.1",
   "policies":{"a":"pol_01","b":"pol_02"},
-  "deterministic":{"items":[]},
-  "semantic":{"summary":"...","observations":[],"disclaimer":"Não é aconselhamento jurídico."},
+  "items":[{
+    "concept_id":"DO-002","base_concept":"Garantia A","importance":"CRITICAL","weight":"10",
+    "a":{"term":"...","evidence_ids":["ev_1"],"contract_status":"CONTRACTED","base_result":"1.00","adjustment_factor":"1.00","weighted_points":"10.00"},
+    "b":{"term":"...","evidence_ids":["ev_9"],"contract_status":"NOT_PROVEN","base_result":"0.25","adjustment_factor":"0.50","weighted_points":"1.25","justification":"..."},
+    "main_difference":"...","verdict":"INCONCLUSIVE","confidence":"MEDIUM",
+    "user_guidance":"Consulte seu corretor de seguros."
+  }],
+  "scores":[{"policy":"a","profile":"BASE","raw_score":"...","max_possible":"207","adherence_score":"0.776","documentary_score":"...","completeness_index":"..."}],
+  "executive_summary":{"decision_mode":"CONDITIONED","conclusion":"...","broker_guidance":"Consulte seu corretor de seguros."},
+  "quality_gate":{"passed":false,"checks":[]},
   "correlation_id":"cor_02"
 }
 ```
 
-Estados: `REQUESTED`, `DETERMINISTIC_COMPLETED`, `SEMANTIC_PROCESSING`, `COMPLETED`, `FAILED`.
+Estados: `REQUESTED`, `DETERMINISTIC_COMPLETED`, `ASSESSING`, `SCORED`, `SUMMARIZING`, `COMPLETED`, `PARTIAL`, `FAILED`. Números trafegam como string decimal.
+
+### GET `/concepts`
+
+**Objetivo:** listar o catálogo vigente com importância, peso, justificativa e critério. **Query:** `importance?`, `domain?`, `active?`.
+
+### GET `/concepts/{concept_id}/occurrences`
+
+**Objetivo:** listar ocorrências do conceito nas apólices, com termo, trecho literal, documento, cláusula, página e status. **Query:** `policy_id?`, `insurer?`, `contract_status?`, `limit`, `cursor`.
+
+### GET `/search`
+
+**Objetivo:** consulta estruturada por variante, cobertura, seguradora, número da apólice, documento, cláusula, página, importância, peso e status. Resolve variantes para `concept_id`.
+
+### POST `/queries`
+
+**Objetivo:** pergunta em linguagem natural respondida só com evidências armazenadas (`P-QUERY-001`). **Response:** resposta objetiva, conceito, termo, trecho, fonte, interpretação, status, peso, impacto e orientação.
 
 ## 4. Envelope de erro
 

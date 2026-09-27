@@ -9,8 +9,8 @@ ClauseAI/
 │   │   ├── domain/
 │   │   │   ├── entities/
 │   │   │   ├── value_objects/
-│   │   │   ├── services/
-│   │   │   └── interfaces/
+│   │   │   ├── services/          # ScoringService, VerdictRules, ProfileWeights, QualityGate
+│   │   │   └── interfaces/        # ConceptCatalog e demais portas
 │   │   ├── application/
 │   │   │   ├── commands/
 │   │   │   ├── queries/
@@ -24,7 +24,9 @@ ClauseAI/
 │   │   │   ├── ai/
 │   │   │   │   ├── gemini/
 │   │   │   │   ├── groq/
-│   │   │   │   └── prompts/
+│   │   │   │   └── prompts/       # P-SYSTEM, P-INTAKE, P-EXTRACT, P-NORMALIZE, P-ASSESS, P-EXECUTIVE, P-QUERY
+│   │   │   ├── pdf/               # leitura nativa de PDF
+│   │   │   ├── knowledge_base/    # seed e leitura versionada do catálogo e pesos
 │   │   │   └── event_bus/
 │   │   ├── presentation/
 │   │   │   └── api/
@@ -50,7 +52,8 @@ ClauseAI/
 │   │   ├── features/
 │   │   │   ├── documents/
 │   │   │   ├── policies/
-│   │   │   └── comparisons/
+│   │   │   ├── concepts/          # catálogo e consulta por conceito
+│   │   │   └── comparisons/       # tabela ponderada, perfis e resumo executivo
 │   │   ├── services/
 │   │   ├── types/
 │   │   ├── styles/
@@ -58,6 +61,8 @@ ClauseAI/
 │   ├── tests/
 │   └── package.json
 ├── docs/
+│   └── domain/                # base de conhecimento D&O e arquivos-fonte
+├── Projeto_Final_Artefatos/   # relatório, pitch deck, vídeo e demais artefatos do desafio
 └── README.md
 ```
 
@@ -65,7 +70,7 @@ ClauseAI/
 
 ### `domain`
 
-Contém entidades, value objects, invariantes e serviços puros. Não importa FastAPI, Pydantic de entrada, Firebase, SDKs de IA ou variáveis de ambiente. Pydantic pode ser usado apenas se o contrato não acoplar o domínio à camada HTTP; caso contrário, usar dataclasses/tipos de domínio e DTOs separados.
+Contém entidades, value objects, invariantes e serviços puros, incluindo o cálculo de pontos, scores, completude, pareceres e perfis. A pontuação fica no domínio porque é regra de negócio determinística e testável sem IA. Não importa FastAPI, Pydantic de entrada, Firebase, SDKs de IA ou variáveis de ambiente. Pydantic pode ser usado apenas se o contrato não acoplar o domínio à camada HTTP; caso contrário, usar dataclasses/tipos de domínio e DTOs separados.
 
 ### `application`
 
@@ -105,10 +110,21 @@ ComparisonRepository
   update(comparison)
   get(comparison_id)
 
+ConceptCatalog
+  get_version(version?) -> KnowledgeBase
+  get(concept_id) -> Concept
+  resolve_variant(term) -> list[ConceptId]
+
 AIOrchestrator
+  classify_document(document_context) -> DocumentIntake
   extract_policy(document_context) -> ExtractionResult
-  compare_policies(deterministic_result, policies) -> SemanticResult
-  explain_comparison(comparison) -> Explanation
+  normalize_evidence(evidences, catalog) -> list[ConceptOccurrence]
+  assess_concepts(input) -> list[ConceptAssessmentDraft]
+  summarize_decision(input) -> ExecutiveSummaryDraft
+  answer_query(input) -> QueryAnswer
+
+PdfTextReader
+  read_pages(storage_key) -> list[PageText]
 
 EventBus
   publish(event)
@@ -129,17 +145,21 @@ Cada handler recebe um evento, carrega o mínimo necessário, executa uma ação
 | `StartDocumentProcessingHandler` | valida disponibilidade do arquivo, cria `ProcessingJob` e publica início/extração |
 | `ExtractPolicyHandler` | lê arquivo, chama `AIOrchestrator.extract_policy`, grava resultado bruto |
 | `ValidateExtractionHandler` | valida schema, normaliza valores e gera `PolicyStructured` ou falha |
-| `PersistPolicyHandler` | faz upsert idempotente da apólice e publica `PolicyStored` |
-| `RunDeterministicComparisonHandler` | carrega duas apólices e gera fatos comparáveis |
-| `RunSemanticComparisonHandler` | envia fatos e evidências ao Groq e grava interpretação |
-| `CompleteComparisonHandler` | consolida estados e publica `ComparisonCompleted` |
+| `NormalizeEvidenceHandler` | vincula evidências ao catálogo e publica `EvidenceNormalized` |
+| `PersistPolicyHandler` | faz upsert idempotente da apólice e ocorrências e publica `PolicyStored` |
+| `RunDeterministicComparisonHandler` | carrega duas apólices e gera fatos comparáveis por `concept_id` |
+| `AssessConceptsHandler` | envia ocorrências e critérios ao Groq e grava avaliações validadas |
+| `CalculateScoresHandler` | executa `ScoringService` para perfil base e perfis de risco |
+| `GenerateExecutiveSummaryHandler` | gera resumo executivo sobre números calculados |
+| `CompleteComparisonHandler` | executa `QualityGate`, consolida estados e publica `ComparisonCompleted` |
 | `ProcessingFailureHandler` | registra erro, tentativa e estado final/retry agendável |
 
 ## 5. Frontend
 
 - `features/documents`: upload, lista, status e polling controlado.
 - `features/policies`: leitura de dados estruturados e evidências.
-- `features/comparisons`: seleção de exatamente duas apólices, tabela factual e explicação semântica.
+- `features/concepts`: catálogo, filtros e consulta por conceito/variante.
+- `features/comparisons`: seleção de exatamente duas apólices, seletor de perfil, filtro por importância, tabela ponderada, scores, evidências, alertas e resumo executivo.
 - `services/api-client`: único ponto de comunicação com REST.
 - `types`: tipos derivados dos contratos públicos, sem replicar regras de domínio.
 - `components`: componentes de apresentação reutilizáveis sem chamadas de API ocultas.

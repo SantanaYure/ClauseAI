@@ -2,26 +2,31 @@
 
 ## 1. Objetivo e escopo
 
-O ClauseAI recebe documentos de apólice D&O, armazena o original, extrai dados estruturados com IA, valida e persiste esses dados, compara duas apólices de modo determinístico e produz uma explicação semântica rastreável. O MVP privilegia execução local simples, baixa acoplagem e capacidade de substituir provedores externos sem alterar o domínio.
+O ClauseAI recebe documentos de apólice D&O, armazena o original, extrai evidências com leitura nativa de PDF ou OCR/IA multimodal, normaliza essas evidências contra o catálogo de conceitos D&O, persiste dados estruturados, compara duas apólices conceito a conceito, calcula pontuação ponderada e apresenta um resumo executivo condicionado e rastreável. As regras de domínio vêm de [`domain/DO_KNOWLEDGE_BASE.md`](../domain/DO_KNOWLEDGE_BASE.md). O MVP privilegia execução local simples, baixa acoplagem e capacidade de substituir provedores externos sem alterar o domínio.
 
 ### Requisitos funcionais
 
 | ID | Requisito |
 |---|---|
-| RF-01 | Aceitar PDF e imagens suportadas pelo contrato de upload. |
+| RF-01 | Aceitar PDF e imagens suportadas pelo contrato de upload e registrar tipo de documento, seguradora, versão e vigência. |
 | RF-02 | Armazenar original, metadados, status e histórico de processamento. |
 | RF-03 | Processar fora do ciclo da requisição de upload. |
-| RF-04 | Extrair conteúdo estruturado e evidências de origem. |
-| RF-05 | Permitir consultar documentos e apólices concluídas. |
-| RF-06 | Comparar exatamente duas apólices. |
-| RF-07 | Exibir fatos determinísticos separados de interpretação semântica. |
-| RF-08 | Expor falhas recuperáveis, correlação e status do processamento. |
+| RF-04 | Extrair conteúdo por leitura nativa ou OCR, com evidências literais (página, seção, cláusula, confiança). |
+| RF-05 | Normalizar evidências contra o catálogo D&O, classificando tipo de ocorrência, relação terminológica e status. |
+| RF-06 | Consultar documentos, apólices e evidências por conceito, variante, seguradora, cláusula, página, peso e status. |
+| RF-07 | Comparar exatamente duas apólices com os mesmos conceitos, critérios e pesos. |
+| RF-08 | Calcular Pontos Ponderados, Score de Aderência, Score Documental e Índice de Completude. |
+| RF-09 | Calcular decisão por perfil de risco com pesos ajustados, preservando os pesos-base. |
+| RF-10 | Gerar resumo executivo condicionado, separado da análise documental. |
+| RF-11 | Exibir evidência, avaliação, pontuação e recomendação em camadas distintas, com alertas e “Consulte seu corretor de seguros.” |
+| RF-12 | Expor falhas recuperáveis, correlação e status do processamento. |
 
 ### Requisitos não funcionais
 
 - **Simplicidade:** monólito modular, uma base de código, Event Bus em memória e um processo de worker no MVP.
 - **Rastreabilidade:** cada valor extraído referencia documento, página, trecho, modelo e prompt.
-- **Explicabilidade:** resultados não suportados por evidência ficam nulos ou marcados como ambíguos.
+- **Explicabilidade:** resultados não suportados por evidência ficam nulos ou marcados como ambíguos; toda pontuação diferente de 1,00 tem justificativa.
+- **Reprodutibilidade:** mesma entrada, mesma versão da base de conhecimento e mesmas avaliações produzem os mesmos scores.
 - **Resiliência:** timeout, retry limitado e estado `FAILED` explícito.
 - **Segurança:** segredos apenas em variáveis de ambiente/secret manager; arquivos tratados como dados não confiáveis.
 - **Testabilidade:** interfaces para storage, repositórios, relógio, IDs, IA e Event Bus.
@@ -37,6 +42,8 @@ flowchart LR
     APP --> DOM[Domain Layer]
     APP --> BUS[Event Bus interno]
     BUS --> WORKER[Worker assíncrono do monólito]
+    WORKER --> KB[Catálogo D&O / pesos]
+    WORKER --> SCORE[Scoring Service]
     WORKER --> AI[AI Orchestrator]
     AI --> GEM[Gemini 3.5 Flash Lite]
     AI --> GROQ[Groq / GPT-OSS-120B]
@@ -54,10 +61,15 @@ flowchart LR
 | FastAPI | Serializar entrada/saída, autenticar no futuro, mapear erros | Executar regra de negócio ou chamada longa de IA |
 | Application | Orquestrar casos de uso, transações lógicas e publicação de eventos | Conhecer detalhes de HTTP, Firestore ou SDKs de IA |
 | Domain | Entidades, value objects, invariantes e comparação determinística | Importar FastAPI, Firebase ou Gemini/Groq |
-| Document Service | Validar metadados, persistir original e iniciar processamento | Interpretar cláusulas |
-| Extraction Service | Coordenar extração, parsing, validação e normalização | Escolher apólice melhor |
-| Policy Service | Construir e persistir estrutura de apólice | Fazer chamadas externas diretamente |
-| Comparison Service | Comparação determinística e montagem do contexto semântico | Ocultar diferenças factuais |
+| Document Service (agente de recepção) | Validar arquivo, classificar tipo de documento, persistir original e iniciar processamento | Interpretar cláusulas |
+| Extraction Service (agente de OCR/extração) | Leitura nativa, OCR multimodal, parsing e validação de evidências | Completar texto ilegível por inferência |
+| Normalization Service (agente de cláusulas) | Vincular evidências a conceitos do catálogo e classificar ocorrência/relação/status | Unir conceitos distintos ou declarar equivalência automática |
+| Policy Service (agente de estruturação) | Construir e persistir estrutura de apólice e ocorrências | Fazer chamadas externas diretamente |
+| Knowledge Base | Fornecer catálogo, variantes, pesos, escalas e perfis versionados | Ser alterada pela IA |
+| Comparison Service (agente comparador) | Comparação determinística e avaliação por conceito via IA | Ocultar diferenças factuais |
+| Scoring Service | Calcular pontos, scores, completude, pareceres e perfis de forma determinística | Chamar LLM ou alterar pesos silenciosamente |
+| Report Service (agente de relatório) | Montar resumo executivo e tabela final com números já calculados | Criar fatos ou números novos |
+| Quality Gate | Executar o checklist do prompt 16 antes de marcar a comparação como concluída | Esconder limitações |
 | AI Orchestrator | Roteamento, prompts, schemas, timeout, retry, logs e providers | Ser fonte de regra de negócio |
 | Repositories | Persistência por contratos pequenos | Vazar objetos do SDK para domínio |
 | Event Bus | Publicar e consumir eventos internos | Ser banco de dados ou garantir entrega durável |
@@ -126,12 +138,16 @@ sequenceDiagram
     Bus->>Det: RunDeterministicComparisonHandler
     Det->>DB: grava itens determinísticos
     Det->>Bus: DeterministicComparisonCompleted
-    Bus->>AI: RunSemanticComparisonHandler
-    AI-->>Bus: interpretação com evidências
-    Bus->>DB: grava resultado semântico
-    Bus->>DB: status=COMPLETED
+    Bus->>AI: AssessConceptsHandler (P-ASSESS-001)
+    AI-->>Bus: Resultado-base, Fator de Ajuste e justificativas por conceito
+    Bus->>DB: grava avaliações validadas
+    Bus->>Det: CalculateScoresHandler (ScoringService)
+    Det->>DB: pontos, scores, completude, pareceres e perfis
+    Bus->>AI: GenerateExecutiveSummaryHandler (P-EXECUTIVE-001)
+    AI-->>Bus: resumo executivo condicionado
+    Bus->>DB: Quality Gate + status=COMPLETED
     UI->>API: GET /comparisons/{id}
-    API-->>UI: resultado factual + semântico
+    API-->>UI: fatos, avaliações, scores e resumo
 ```
 
 ## 7. Eventos do MVP
@@ -161,9 +177,11 @@ Todos implementam o envelope comum:
 | `PolicyStructured` | Validation handler | persistência | `policy_id`, `document_id`, `schema_version` |
 | `PolicyStored` | Policy handler | UI/observabilidade | `policy_id`, `document_id` |
 | `ComparisonRequested` | Comparison use case | determinístico | `comparison_id`, `policy_ids[2]` |
-| `DeterministicComparisonCompleted` | Comparison handler | semântico | `comparison_id`, `item_count` |
-| `SemanticComparisonRequested` | Determinístico | semântico | `comparison_id` |
-| `SemanticComparisonCompleted` | Semântico | finalização | `comparison_id`, `interpretation_id` |
+| `EvidenceNormalized` | Normalization handler | persistência | `policy_id`, `occurrence_count`, `knowledge_base_version` |
+| `DeterministicComparisonCompleted` | Comparison handler | avaliação | `comparison_id`, `item_count` |
+| `ConceptAssessmentCompleted` | Assessment handler | pontuação | `comparison_id`, `assessed_count`, `inconclusive_count` |
+| `ScoringCompleted` | Scoring handler | resumo executivo | `comparison_id`, `score_a`, `score_b`, `completeness_a`, `completeness_b` |
+| `ExecutiveSummaryCompleted` | Report handler | finalização | `comparison_id`, `summary_id` |
 | `ComparisonCompleted` | Finalização | UI/observabilidade | `comparison_id` |
 | `ProcessingFailed` | qualquer handler | UI/observabilidade | `entity_type`, `entity_id`, `error_code` |
 
@@ -180,8 +198,11 @@ O Event Bus em memória não é durável. Portanto, o estado mínimo é persisti
 - Monólito modular para reduzir operação e permitir desenvolvimento por uma pessoa.
 - Firestore como persistência documental simples e Storage para binários.
 - IA isolada por `AIOrchestrator` e portas `ExtractionProvider`/`ComparisonProvider`.
-- Comparação determinística antes da semântica para separar fatos de interpretação.
+- Comparação determinística antes da avaliação por IA para separar fatos de interpretação.
+- IA propõe Resultado-base e Fator de Ajuste dentro de escalas fechadas; o backend calcula todos os números.
+- Catálogo, pesos e perfis versionados como base de conhecimento, fora do código e dos prompts.
+- Arquitetura multiagente sugerida pelo desafio mapeada em serviços do monólito, não em processos separados.
 - Eventos internos apenas onde há trabalho demorado ou desacoplamento real.
-- Sem regra de negócio de D&O não validada pela equipe de seguros.
+- Pontos não definidos pelas bases continuam `PENDING_BUSINESS_VALIDATION`.
 
 Ver detalhes em [`adrs/ADRS.md`](../adrs/ADRS.md).

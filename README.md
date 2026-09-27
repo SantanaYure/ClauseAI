@@ -1,6 +1,12 @@
 # ClauseAI
 
-Fundação do MVP acadêmico para análise e comparação inteligente de apólices D&O.
+Plataforma inteligente para análise e comparação de apólices D&O, desenvolvida como Projeto Final do Instituto de Inteligência Artificial Aplicada (I2A2).
+
+## Descrição do projeto
+
+O ClauseAI recebe apólices D&O em PDF ou imagem, extrai o conteúdo por leitura nativa ou OCR com IA generativa, normaliza cláusulas e coberturas contra um dicionário D&O, armazena as evidências de forma estruturada e compara duas apólices conceito a conceito. A comparação aplica pesos técnicos, calcula Score de Aderência e Índice de Completude, avalia perfis de risco e apresenta um resumo executivo condicionado, sempre com o trecho literal, a cláusula e a página de origem. Quando a informação é ambígua, incompleta ou não comprovada, o sistema orienta: “Consulte seu corretor de seguros.”
+
+As regras de negócio estão em [`docs/domain/DO_KNOWLEDGE_BASE.md`](docs/domain/DO_KNOWLEDGE_BASE.md) e a documentação técnica em [`docs/`](docs/README.md).
 
 ## Visão geral
 
@@ -11,7 +17,7 @@ O repositório contém um frontend React/TypeScript/SCSS e um backend Python/Fas
 - Frontend: React, TypeScript, Vite e SCSS.
 - Backend: Python, FastAPI e Uvicorn.
 - Qualidade: Ruff, Ruff Formatter, mypy, pytest, ESLint, Prettier e Vitest.
-- Integrações futuras: Firebase/Firestore/Storage, Gemini e Groq.
+- Integrações planejadas: Firebase/Firestore/Storage, Gemini 3.5 Flash Lite (extração e OCR multimodal) e GPT-OSS-120B via Groq (avaliação e resumo).
 
 ## Requisitos
 
@@ -26,6 +32,7 @@ ClauseAI/
 ├── backend/
 ├── frontend/
 ├── docs/
+├── Projeto_Final_Artefatos/
 ├── .editorconfig
 ├── .gitignore
 ├── CONTRIBUTING.md
@@ -96,4 +103,14 @@ Nunca use credenciais reais no repositório. Consulte `backend/.env.example` e `
 
 Implementado: bootstrap executável, `GET /health`, CORS configurável, correlação, erros padronizados, logging estruturado, `InMemoryEventBus`, configuração tipada e testes básicos.
 
-Não implementado: upload, persistência real, extração, comparação, autenticação, filas externas e regras de seguros.
+Não implementado: upload, persistência real, extração, normalização, comparação ponderada, autenticação e filas externas. A sequência está em [`docs/ROADMAP.md`](docs/ROADMAP.md).
+
+## Integrantes
+
+<!-- Preencher com nome e contato de cada integrante do grupo antes da entrega. -->
+
+- A definir.
+
+## Licença
+
+Este projeto está licenciado sob a [licença MIT](LICENSE).
