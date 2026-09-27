@@ -156,10 +156,12 @@ Cada handler recebe um evento, carrega o mínimo necessário, executa uma ação
 
 ## 5. Frontend
 
-- `features/documents`: upload, lista, status e polling controlado.
-- `features/policies`: leitura de dados estruturados e evidências.
+- `features/home`: tela inicial.
+- `features/policies`: apólices com documentos agrupados, upload de vários arquivos, status de processamento e evidências.
 - `features/concepts`: catálogo, filtros e consulta por conceito/variante.
 - `features/comparisons`: seleção de exatamente duas apólices, seletor de perfil, filtro por importância, tabela ponderada, scores, evidências, alertas e resumo executivo.
+- `features/history`: lista de comparações.
+- `app/router.ts`: rotas por hash, sem dependência externa; `services/api/clause-api.ts` é o único acesso a dados e chama a API REST `/api/v1`, convertendo snake_case para camelCase. O frontend não embute dados de apólices nem calcula pontuação.
 - `services/api-client`: único ponto de comunicação com REST.
 - `types`: tipos derivados dos contratos públicos, sem replicar regras de domínio.
 - `components`: componentes de apresentação reutilizáveis sem chamadas de API ocultas.

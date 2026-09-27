@@ -1,6 +1,8 @@
 # ClauseAI frontend
 
-Frontend React/TypeScript/SCSS da fundação do MVP. A tela inicial consulta `GET /health` por meio do `ApiClient` e exibe se o backend está online. Não há upload nem telas de domínio nesta etapa.
+Frontend React/TypeScript/SCSS do MVP, mobile first. As cinco telas do menu (Início, Apólices, Comparar, Conceitos e Histórico) são navegáveis e seguem [`docs/specs/SDD_SPECIFICATIONS.md`](../docs/specs/SDD_SPECIFICATIONS.md) (SPEC-010) e a [base de conhecimento D&O](../docs/domain/DO_KNOWLEDGE_BASE.md).
+
+As telas não têm dados embutidos: tudo vem da API REST em `VITE_API_BASE_URL` + `/api/v1` (contratos em [`docs/architecture/PERSISTENCE_AND_API.md`](../docs/architecture/PERSISTENCE_AND_API.md)), acessada só por `src/services/api/clause-api.ts`. Sem o backend em execução, as telas mostram estados vazios ou de erro com a opção “Tentar novamente”. Processamento de apólices e comparações em andamento são acompanhados por consulta periódica até um estado final.
 
 ## Setup
 
@@ -14,6 +16,8 @@ Copy-Item .env.example .env
 ```powershell
 npm run dev
 ```
+
+Rotas: `#/`, `#/apolices`, `#/apolices/nova`, `#/apolices/{id}`, `#/comparar`, `#/comparar/{id}`, `#/conceitos`, `#/conceitos/{id}`, `#/historico`.
 
 ## Quality
 

@@ -1,34 +1,132 @@
-import { render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../src/app/App';
 
-const { getHealth } = vi.hoisted(() => ({ getHealth: vi.fn() }));
+type Route = { match: string; method?: string; status?: number; body: unknown };
 
-vi.mock('../src/services/api/api-client', () => ({
-  apiClient: {
-    getHealth,
-  },
-}));
+const fetchMock = vi.fn();
+
+function mockApi(routes: Route[]) {
+  fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+    const method = init?.method ?? 'GET';
+    const route = routes.find(
+      (candidate) => url.includes(candidate.match) && (candidate.method ?? 'GET') === method,
+    );
+    if (!route) throw new TypeError('Failed to fetch');
+    return new Response(JSON.stringify(route.body), { status: route.status ?? 200 });
+  });
+}
+
+const emptyPage = { items: [], next_cursor: null };
+
+async function openRoute(hash: string) {
+  window.location.hash = hash;
+  await act(async () => {
+    render(<App />);
+  });
+}
 
 describe('App', () => {
   beforeEach(() => {
-    getHealth.mockReset();
+    window.location.hash = '';
+    fetchMock.mockReset();
+    vi.stubGlobal('fetch', fetchMock);
   });
 
-  it('renders the project and shows the backend online status', async () => {
-    getHealth.mockResolvedValue({ status: 'ok' });
-
-    render(<App />);
-
-    expect(screen.getByRole('heading', { name: 'ClauseAI' })).toBeInTheDocument();
-    await waitFor(() => expect(screen.getByText('Backend status: Online')).toBeInTheDocument());
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
-  it('shows offline when the health check fails', async () => {
-    getHealth.mockRejectedValue(new Error('connection refused'));
+  it('shows the five menu items and marks the active one', async () => {
+    mockApi([{ match: '/api/v1/comparisons', body: emptyPage }]);
+    await openRoute('#/');
+    const nav = screen.getByRole('navigation', { name: 'Menu principal' });
+    for (const label of ['Início', 'Apólices', 'Comparar', 'Conceitos', 'Histórico']) {
+      expect(within(nav).getByRole('link', { name: label })).toBeInTheDocument();
+    }
+    expect(within(nav).getByRole('link', { name: 'Início' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    expect(screen.getByText('Consulte seu corretor de seguros.')).toBeInTheDocument();
+  });
 
-    render(<App />);
+  it('shows an empty state when there are no policies', async () => {
+    mockApi([{ match: '/api/v1/policies', body: emptyPage }]);
+    await openRoute('#/apolices');
+    expect(await screen.findByText('Nenhuma apólice encontrada')).toBeInTheDocument();
+  });
 
-    await waitFor(() => expect(screen.getByText('Backend status: Offline')).toBeInTheDocument());
+  it('shows a retryable error when the API is unreachable', async () => {
+    mockApi([]);
+    await openRoute('#/apolices');
+    expect(await screen.findByText(/Não foi possível conectar à API/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Tentar novamente' })).toBeInTheDocument();
+  });
+
+  it('shows the API error message with its correlation id', async () => {
+    mockApi([
+      {
+        match: '/api/v1/comparisons/cmp_x',
+        status: 404,
+        body: {
+          error: {
+            code: 'COMPARISON_NOT_FOUND',
+            message: 'Comparação não encontrada.',
+            correlation_id: 'cor_9',
+          },
+        },
+      },
+    ]);
+    await openRoute('#/comparar/cmp_x');
+    expect(
+      await screen.findByText('Comparação não encontrada. (correlação cor_9)'),
+    ).toBeInTheDocument();
+  });
+
+  it('asks for two processed policies before comparing', async () => {
+    mockApi([{ match: '/api/v1/policies', body: emptyPage }]);
+    await openRoute('#/comparar');
+    expect(
+      await screen.findByText('São necessárias duas apólices processadas'),
+    ).toBeInTheDocument();
+  });
+
+  it('shows progress while a comparison is still being processed', async () => {
+    mockApi([
+      {
+        match: '/api/v1/comparisons/cmp_1',
+        body: { comparison_id: 'cmp_1', status: 'ASSESSING', items: [], profiles: [] },
+      },
+    ]);
+    await openRoute('#/comparar/cmp_1');
+    expect(await screen.findByText('Avaliando conceitos com IA…')).toBeInTheDocument();
+  });
+
+  it('sends questions to the query endpoint', async () => {
+    mockApi([
+      { match: '/api/v1/concepts', body: emptyPage },
+      {
+        match: '/api/v1/queries',
+        method: 'POST',
+        body: {
+          question: 'Qual é o LMG?',
+          concept: null,
+          answer: 'Sem evidência.',
+          matches: [],
+          guidance: true,
+        },
+      },
+    ]);
+    await openRoute('#/conceitos');
+    fireEvent.change(screen.getByLabelText('Pergunte ou busque um conceito'), {
+      target: { value: 'Qual é o LMG?' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Perguntar' }));
+    expect(
+      await screen.findByRole('heading', { name: 'Sem correspondência na base' }),
+    ).toBeInTheDocument();
+    const [, init] = fetchMock.mock.calls.find(([url]) => String(url).includes('/queries'))!;
+    expect(JSON.parse(String(init.body))).toEqual({ question: 'Qual é o LMG?' });
   });
 });

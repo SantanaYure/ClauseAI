@@ -374,6 +374,20 @@ Mock de provider, injection, hallucination fixtures, timeout e validação de sc
 
 Apresentar comparação compreensível, rastreável e auditável (documento 3, prompts 14 e 15; base de conhecimento, seção 8).
 
+### Navegação (mobile first)
+
+Menu fixo com cinco itens — barra inferior no celular, barra lateral a partir de 1024 px:
+
+| Item | Rota | Conteúdo |
+|---|---|---|
+| Início | `#/` | chamada principal, “Nova comparação”, “Adicionar apólice”, última comparação, como funciona e aviso ao corretor |
+| Apólices | `#/apolices`, `#/apolices/nova`, `#/apolices/{id}` | apólices com seus documentos agrupados, status de processamento, alertas, upload de vários arquivos com tipo de documento e evidências por conceito |
+| Comparar | `#/comparar`, `#/comparar/{id}` | seleção de Apólice 01/02 e perfil; resultado em abas Resumo, Conceitos, Perfis e Qualidade |
+| Conceitos | `#/conceitos`, `#/conceitos/{id}` | pergunta em linguagem natural (SPEC-018), catálogo filtrável e onde cada conceito aparece |
+| Histórico | `#/historico` | comparações anteriores, tipo de resultado, scores e repetição das que falharam |
+
+Status de processamento usam azul ou neutro; laranja, vermelho, amarelo, verde e cinza ficam reservados aos resultados da comparação. Não há central de notificações no MVP.
+
 ### Comportamento, entradas e saídas
 
 Entrada: response de comparison. UI exibe documentos processados, qualidade da extração, seletor de Apólice 01/02, filtro por nível de importância, seletor de perfil de risco, tabela com uma linha por conceito (colunas do prompt 15, incluindo peso, Resultado-base, Fator de Ajuste, pontos e parecer), Score de Aderência, Índice de Completude, indicador comparativo, resumo executivo, evidência literal com fonte/cláusula/página e alertas.
@@ -393,6 +407,7 @@ Não esconder `UNKNOWN`, `NOT_COMPARABLE`, `INCONCLUSIVE` ou `PENDING_BUSINESS_V
 - Filtro por importância e troca de perfil não alteram os pesos-base exibidos.
 - Recomendação `CONDITIONED` é visualmente distinta de `TECHNICAL`.
 - Loading/erro/resultado parcial são estados explícitos.
+- Alvos de toque têm pelo menos 44 px e nenhuma tela rola na horizontal a partir de 320 px.
 - Layout é utilizável em viewport definido pelo MVP e tem acessibilidade básica.
 
 ### Fora de escopo

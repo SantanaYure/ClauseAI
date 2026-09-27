@@ -15,7 +15,7 @@ Representa o arquivo recebido e seus metadados.
 - **Atributos:** `document_id`, `original_filename`, `content_type`, `file_kind` (`SEARCHABLE_PDF`, `SCANNED_PDF`, `IMAGE`, `OTHER`), `document_type` (`DocumentType`), `insurer?`, `policy_name?`, `policy_number?`, `issue_date?`, `validity?`, `version?`, `language?`, `size_bytes`, `checksum_sha256`, `storage_key`, `uploaded_at`, `status`, `correlation_id`, `page_count?`, `extraction_quality?`, `ocr_required`, `metadata`, `failure?`.
 - Campos não identificados recebem “Não identificado” e disparam `BROKER_GUIDANCE`.
 - **Responsabilidade:** garantir identidade, integridade básica, tipo permitido e ciclo do arquivo.
-- **Relacionamentos:** possui zero ou mais `ProcessingJob`; origina zero ou uma `Policy` principal no MVP.
+- **Relacionamentos:** possui zero ou mais `ProcessingJob`; pertence a exatamente uma `Policy`.
 - **Estados:** `UPLOADED`, `PROCESSING`, `EXTRACTING`, `VALIDATING`, `COMPLETED`, `FAILED`.
 
 ### `Policy`
@@ -24,7 +24,8 @@ Representa a apólice estruturada, sem decidir mérito comercial ou jurídico.
 
 - **Atributos:** `policy_id`, `document_id`, `schema_version`, `insurer`, `insured`, `policy_number?`, `validity`, `limits`, `deductibles`, `coverages`, `exclusions`, `clauses`, `source_extraction_id`, `created_at`, `updated_at`.
 - **Responsabilidade:** manter uma visão estruturada e rastreável do documento.
-- **Relacionamentos:** pertence a um `Document`; contém `PolicySection`, `Coverage`, `Exclusion`, `Limit`, `Deductible` e `Clause`.
+- **Relacionamentos:** agrupa um ou mais `Document` (apólice, especificação, condições gerais/especiais/particulares, endossos); contém `PolicySection`, `Coverage`, `Exclusion`, `Limit`, `Deductible` e `Clause`.
+- **Regra:** sem documento do tipo apólice, especificação ou endosso, nenhuma cobertura pode ser `CONTRACTED`; a apólice fica com alerta e `BROKER_GUIDANCE`.
 - **Estados:** `DRAFT`, `VALIDATED`, `STORED`, `STALE` (quando o schema mudar).
 - `insurer`, `insured`, regra de agregação de limites e semântica de cobertura ainda podem conter `PENDING_BUSINESS_VALIDATION`.
 
@@ -155,7 +156,7 @@ Execução de processamento de um documento ou comparação.
 ```mermaid
 erDiagram
     DOCUMENT ||--o{ PROCESSING_JOB : has
-    DOCUMENT ||--o| POLICY : produces
+    POLICY ||--|{ DOCUMENT : groups
     POLICY ||--o{ POLICY_SECTION : contains
     POLICY ||--o{ COVERAGE : contains
     POLICY ||--o{ EXCLUSION : contains
@@ -178,7 +179,7 @@ erDiagram
 ## 4. Invariantes técnicas
 
 1. Uma comparação referencia duas apólices distintas e existentes.
-2. Uma apólice persistida referencia um único documento fonte no MVP.
+2. Uma apólice agrupa um ou mais documentos; cada documento pertence a uma única apólice.
 3. Um `ComparisonItem` não afirma igualdade quando faltam evidências suficientes.
 4. `confidence` é um sinal do modelo, não uma probabilidade calibrada nem uma garantia.
 5. Valores monetários preservam moeda e base; conversão cambial está fora do escopo.

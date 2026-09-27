@@ -125,11 +125,21 @@ Limitar listas, tamanho de payload e paginação. O cliente não deve buscar tod
 
 Base path recomendado: `/api/v1`. Todos os endpoints aceitam/responderão JSON, exceto upload multipart. Respostas de criação assíncrona usam `202 Accepted`.
 
+### POST `/policies`
+
+**Objetivo:** criar uma apólice com todos os seus documentos de uma vez (tela “Adicionar apólice”).
+
+**Request:** `multipart/form-data` com `insurer?`, `name?` e um ou mais campos `files[]`, cada um acompanhado de `document_types[]` (`POLICY`, `SPECIFICATION`, `GENERAL_CONDITIONS`, `ENDORSEMENT`…). Cada arquivo passa pelas mesmas validações de `POST /documents` e gera um `Document` ligado à apólice.
+
+**Response `202`:** `policy_id`, `status: PROCESSING`, `document_ids[]`, `correlation_id`.
+
+**Erros:** os de `POST /documents`, mais `422 INVALID_DOCUMENT_TYPE`.
+
 ### POST `/documents`
 
-**Objetivo:** receber PDF/imagem, validar extensão/MIME/tamanho, salvar o original e iniciar processamento.
+**Objetivo:** receber PDF/imagem, validar extensão/MIME/tamanho, salvar o original e iniciar processamento. Com `policy_id`, acrescenta o documento (por exemplo, um endosso) a uma apólice existente.
 
-**Request:** `multipart/form-data`, campo `file`; opcional `metadata` JSON limitado.
+**Request:** `multipart/form-data`, campo `file`; opcional `policy_id`, `document_type` e `metadata` JSON limitado.
 
 **Response `202`:**
 
@@ -213,6 +223,14 @@ Estados públicos: `UPLOADED`, `PROCESSING`, `EXTRACTING`, `VALIDATING`, `COMPLE
 ```
 
 **Erros:** `400 SAME_POLICY`, `404 POLICY_NOT_FOUND`, `409 POLICY_NOT_READY`, `422 INVALID_POLICY_COUNT`, `503 EVENT_BUS_UNAVAILABLE`.
+
+### GET `/comparisons`
+
+**Objetivo:** listar comparações para a tela Histórico.
+
+**Query:** `status?`, `decision_mode?`, `limit`, `cursor`.
+
+**Response `200`:** itens com `comparison_id`, `created_at`, `status`, `policies` (A/B com seguradora), `adherence_a`, `adherence_b`, `decision_mode` e `failure` quando `FAILED`.
 
 ### GET `/comparisons/{comparison_id}`
 
