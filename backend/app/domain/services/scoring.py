@@ -17,6 +17,7 @@ from app.domain.entities import (
     ExecutiveSummary,
     KnowledgeBase,
     Policy,
+    PolicyDocument,
     ProfileResult,
     QualityCheck,
     ScoreSummary,
@@ -26,6 +27,7 @@ from app.domain.value_objects import (
     ContractStatus,
     DecisionMode,
     DocumentType,
+    FileKind,
     Importance,
     Level,
     RiskProfile,
@@ -472,6 +474,17 @@ def build_summary(
     )
 
 
+def _units_detail(documents: list[PolicyDocument]) -> str:
+    """DOCX has no fixed pages: its logical pages are reported as blocks."""
+
+    pages = sum(d.pages for d in documents if d.file_kind != FileKind.DOCX)
+    blocks = sum(d.pages for d in documents if d.file_kind == FileKind.DOCX)
+    parts = [f"{pages} páginas"] if pages or not blocks else []
+    if blocks:
+        parts.append(f"{blocks} blocos (DOCX)")
+    return " e ".join(parts) + "."
+
+
 def build_quality_gate(
     a: Policy,
     b: Policy,
@@ -514,6 +527,13 @@ def build_quality_gate(
         for side in (i.a, i.b)
     )
 
+    kinds = {d.file_kind for d in documents}
+    only_docx = kinds == {FileKind.DOCX}
+    units = (
+        "páginas" if FileKind.DOCX not in kinds else "blocos" if only_docx else "páginas e blocos"
+    )
+    origin = "página" if FileKind.DOCX not in kinds else "bloco" if only_docx else "página ou bloco"
+
     def check(check_id: str, label: str, passed: bool, detail: str) -> QualityCheck:
         return QualityCheck(id=check_id, label=label, passed=passed, detail=detail)
 
@@ -524,13 +544,13 @@ def build_quality_gate(
         check("ocr", "OCR avaliado quanto à confiança", min_confidence >= params.ocr_min_confidence,
               f"OCR usado em {', '.join(ocr_documents)}; menor confiança {min_confidence:.2f}."
               if ocr_documents else "Nenhum documento precisou de OCR."),
-        check("pages", "Todas as páginas foram processadas", all(d.pages > 0 for d in documents),
-              f"{sum(d.pages for d in documents)} páginas."),
+        check("pages", f"Todas as {units} foram processadas", all(d.pages > 0 for d in documents),
+              _units_detail(documents)),
         check("classification", "Documentos classificados",
               all(d.type != DocumentType.OTHER for d in documents),
               f"{', '.join(only_conditions)}: somente condições gerais ou propostas."
               if only_conditions else "Tipos de documento identificados."),
-        check("references", "Evidências com página e cláusula",
+        check("references", f"Evidências com {origin} e cláusula",
               all(e.page > 0 and e.clause for e in evidences), f"{len(evidences)} evidência(s)."),
         check("coverage", "Todos os conceitos ponderados pesquisados",
               len(items) == len(knowledge_base.weighted),

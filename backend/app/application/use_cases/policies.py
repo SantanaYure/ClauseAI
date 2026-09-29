@@ -2,6 +2,7 @@
 (SPEC-001 to SPEC-006, SPEC-015)."""
 
 import asyncio
+import contextlib
 from dataclasses import dataclass
 from uuid import uuid4
 
@@ -36,6 +37,7 @@ from app.domain.interfaces.ports import (
     PdfTextReader,
     PolicyExtractor,
     PolicyRepository,
+    StoredObject,
 )
 from app.domain.services.guardrails import (
     enforce_contract_rule,
@@ -50,7 +52,7 @@ from app.domain.value_objects import (
     Level,
     PolicyStatus,
 )
-from app.shared.exceptions import ApplicationError
+from app.shared.exceptions import ApplicationError, InfrastructureError
 from app.shared.logging import get_logger, log_context
 
 POLICY_UPLOADED = "PolicyUploaded"
@@ -185,8 +187,11 @@ class PolicyService:
         ):
             document_id = f"{policy_id}_doc_{index + 1}"
             extension = FILE_EXTENSIONS[content_type]
-            stored = await self._storage.put(
-                f"policies/{policy_id}/{document_id}.{extension}", file.data, content_type
+            stored = await self._store(
+                f"policies/{policy_id}/{document_id}.{extension}",
+                file.data,
+                content_type,
+                already_stored=[d.storage_key for d in documents],
             )
             documents.append(
                 PolicyDocument(
@@ -214,6 +219,24 @@ class PolicyService:
             Event.create(POLICY_UPLOADED, command.correlation_id, {"policy_id": policy_id})
         )
         return policy
+
+    async def _store(
+        self, key: str, data: bytes, content_type: str, already_stored: list[str]
+    ) -> StoredObject:
+        """Store one original; on failure remove the ones already stored (no orphan files)."""
+
+        try:
+            return await self._storage.put(key, data, content_type)
+        except Exception as exc:
+            for stored_key in already_stored:
+                with contextlib.suppress(Exception):
+                    await self._storage.delete(stored_key)
+            logger.exception("Storage failed during upload")
+            raise InfrastructureError(
+                "Não foi possível armazenar o arquivo. Tente novamente em instantes.",
+                code="STORAGE_UNAVAILABLE",
+                details={"retryable": True},
+            ) from exc
 
     # ---------- Worker ----------
 
@@ -261,10 +284,20 @@ class PolicyService:
                         occurrences.extend(found)
                         intakes.append((document, intake))
                     except ApplicationError as exc:
-                        self._fail(document, exc.message)
+                        self._fail(
+                            document,
+                            exc.message,
+                            exc.code,
+                            bool((exc.details or {}).get("retryable")),
+                        )
                     except Exception:
                         logger.exception("Document processing failed")
-                        self._fail(document, "Falha inesperada ao processar o documento.")
+                        self._fail(
+                            document,
+                            "Falha inesperada ao processar o documento.",
+                            "UNEXPECTED_ERROR",
+                            retryable=True,
+                        )
                     await self._save(policy)
 
                 fresh = await self._repository.get(policy_id)
@@ -387,9 +420,11 @@ class PolicyService:
         return docx.page_texts
 
     @staticmethod
-    def _fail(document: PolicyDocument, message: str) -> None:
+    def _fail(document: PolicyDocument, message: str, code: str, retryable: bool = False) -> None:
         document.status = DocumentStatus.FAILED
         document.failure = message
+        document.failure_code = code
+        document.failure_retryable = retryable
 
     @staticmethod
     def _apply_intake(policy: Policy, intakes: list[tuple[PolicyDocument, DocumentIntake]]) -> None:
