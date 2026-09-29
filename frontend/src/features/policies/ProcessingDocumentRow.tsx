@@ -1,14 +1,18 @@
-import { paths } from '../../app/router';
 import { Badge } from '../../components/Badge';
 import { Icon } from '../../components/Icon';
 import { DOCUMENT_STATUS_LABELS, DOCUMENT_TYPE_LABELS } from '../../shared/labels';
-import { isDocumentBusy } from '../../shared/processing';
+import { PROCESS_STEPS, documentStepIndex, isDocumentBusy } from '../../shared/processing';
 import { documentStatusIcon, documentStatusTone } from '../../shared/tones';
 import type { PolicyDocument } from '../../types/domain';
 
 const FALLBACK_FAILURE = 'Não foi possível ler este documento.';
 
-export function ProcessingDocumentRow({ document }: { document: PolicyDocument }) {
+type ProcessingDocumentRowProps = {
+  document: PolicyDocument;
+  onResend?: () => void;
+};
+
+export function ProcessingDocumentRow({ document, onResend }: ProcessingDocumentRowProps) {
   const failed = document.status === 'FAILED';
   return (
     <li className="card">
@@ -23,7 +27,9 @@ export function ProcessingDocumentRow({ document }: { document: PolicyDocument }
           busy={isDocumentBusy(document.status)}
           icon={documentStatusIcon(document.status)}
         >
-          {DOCUMENT_STATUS_LABELS[document.status]}
+          {isDocumentBusy(document.status)
+            ? PROCESS_STEPS[documentStepIndex(document.status)]
+            : DOCUMENT_STATUS_LABELS[document.status]}
         </Badge>
       </div>
       {failed && (
@@ -32,10 +38,12 @@ export function ProcessingDocumentRow({ document }: { document: PolicyDocument }
             <Icon name="alert" size={16} />
             {document.failure ?? FALLBACK_FAILURE}
           </p>
-          <a className="btn btn--secondary btn--compact" href={paths.newPolicy}>
-            <Icon name="refresh" size={16} />
-            Reenviar
-          </a>
+          {onResend && (
+            <button type="button" className="btn btn--secondary btn--compact" onClick={onResend}>
+              <Icon name="refresh" size={16} />
+              Reenviar
+            </button>
+          )}
         </div>
       )}
     </li>

@@ -5,7 +5,12 @@ import { Illustration } from '../../components/Illustration';
 import type { PolicySummary } from '../../types/domain';
 
 /** Estado de sucesso do fim do envio e do processamento. */
-export function PolicyReadyScreen({ policy }: { policy: PolicySummary }) {
+type PolicyReadyScreenProps = {
+  policy: PolicySummary;
+  onRestart: () => void;
+};
+
+export function PolicyReadyScreen({ policy, onRestart }: PolicyReadyScreenProps) {
   return (
     <section className="success-screen" aria-labelledby="success-title" aria-live="polite">
       <Illustration name="success" className="success-screen__art" />
@@ -26,6 +31,10 @@ export function PolicyReadyScreen({ policy }: { policy: PolicySummary }) {
         <a className="btn btn--secondary btn--block" href={paths.policy(policy.id)}>
           Ver detalhes da apólice
         </a>
+        <button type="button" className="btn btn--ghost btn--block" onClick={onRestart}>
+          <Icon name="plus" size={18} />
+          Adicionar outra apólice
+        </button>
         <a className="btn btn--ghost btn--block" href={paths.policies}>
           Voltar para Apólices
         </a>

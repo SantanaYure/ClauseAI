@@ -35,6 +35,7 @@ export function PolicySlot({ slot, value, onChange, policies }: PolicySlotProps)
           return (
             <option key={policy.id} value={policy.id} disabled={reason !== null}>
               {policy.insurer} — {policy.name}
+              {policy.documents[0] ? ` · ${policy.documents[0].filename}` : ''}
               {reason ? ` (${reason})` : ''}
             </option>
           );

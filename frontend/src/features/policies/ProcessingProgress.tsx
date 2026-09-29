@@ -16,7 +16,13 @@ import { ProcessingDocumentRow } from './ProcessingDocumentRow';
 const POLL_MS = 3000;
 
 /** Acompanha o processamento assíncrono (SPEC-003): consulta o status até um estado final. */
-export function ProcessingProgress({ policyId }: { policyId: string }) {
+type ProcessingProgressProps = {
+  policyId: string;
+  /** Volta à tela de envio para mandar de novo ou adicionar outra apólice. */
+  onRestart: () => void;
+};
+
+export function ProcessingProgress({ policyId, onRestart }: ProcessingProgressProps) {
   const state = useApiData(`policy:${policyId}`, () => clauseApi.getPolicy(policyId), {
     pollMs: POLL_MS,
     shouldPoll: (policy) => policy.status === 'PROCESSING',
@@ -28,12 +34,12 @@ export function ProcessingProgress({ policyId }: { policyId: string }) {
 
   const policy = state.data;
   if (policy.status === 'READY' || policy.status === 'ATTENTION') {
-    return <PolicyReadyScreen policy={policy} />;
+    return <PolicyReadyScreen policy={policy} onRestart={onRestart} />;
   }
   if (policy.status === 'PROCESSING') {
     return <InProgress policy={policy} offline={state.refreshFailed} onCancelled={state.reload} />;
   }
-  return <Stopped policy={policy} />;
+  return <Stopped policy={policy} onRestart={onRestart} />;
 }
 
 type InProgressProps = {
@@ -73,7 +79,7 @@ function InProgress({ policy, offline, onCancelled }: InProgressProps) {
   );
 }
 
-function Stopped({ policy }: { policy: PolicySummary }) {
+function Stopped({ policy, onRestart }: { policy: PolicySummary; onRestart: () => void }) {
   const cancelled = policy.status === 'CANCELLED';
   return (
     <div className="stack">
@@ -89,16 +95,16 @@ function Stopped({ policy }: { policy: PolicySummary }) {
       </p>
       <ul className="stack" aria-label="Documentos enviados">
         {policy.documents.map((document) => (
-          <ProcessingDocumentRow key={document.id} document={document} />
+          <ProcessingDocumentRow key={document.id} document={document} onResend={onRestart} />
         ))}
       </ul>
       {policy.alerts.map((alert) => (
         <BrokerNotice key={alert} reason={alert} />
       ))}
-      <a className="btn btn--primary btn--block" href={paths.newPolicy}>
+      <button type="button" className="btn btn--primary btn--block" onClick={onRestart}>
         <Icon name="upload" size={20} />
         Reenviar documentos
-      </a>
+      </button>
       <a className="btn btn--secondary btn--block" href={paths.policies}>
         Voltar para Apólices
       </a>

@@ -21,11 +21,8 @@ export function NewPolicyPage() {
   if (form.createdId) {
     return (
       <div className="page">
-        <PageHeader
-          title="Processando apólice"
-          back={{ href: paths.policies, label: 'Apólices' }}
-        />
-        <ProcessingProgress policyId={form.createdId} />
+        <PageHeader title="Envio da apólice" back={{ href: paths.policies, label: 'Apólices' }} />
+        <ProcessingProgress policyId={form.createdId} onRestart={form.restart} />
       </div>
     );
   }

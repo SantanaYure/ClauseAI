@@ -93,10 +93,12 @@ describe('Processando apólice', () => {
       ),
     );
     expect(await screen.findByText(/protegido por senha/)).toBeInTheDocument();
-    expect(screen.getAllByRole('link', { name: /Reenviar/ })[0]).toHaveAttribute(
-      'href',
-      '#/apolices/nova',
-    );
+    const resend = screen.getAllByRole('button', { name: /Reenviar/ })[0];
+    await act(async () => {
+      fireEvent.click(resend);
+    });
+    expect(screen.getByRole('button', { name: /Enviar/ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('PDF ou DOCX');
   });
 
   it('mostra a tela de sucesso com a ilustração e a ação de comparar', async () => {
@@ -109,5 +111,10 @@ describe('Processando apólice', () => {
       'href',
       '#/comparar?a=pol_1',
     );
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Adicionar outra apólice/ }));
+    });
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('PDF ou DOCX');
   });
 });

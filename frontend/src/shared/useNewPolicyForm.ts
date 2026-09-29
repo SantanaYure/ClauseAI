@@ -68,6 +68,13 @@ export function useNewPolicyForm() {
   const hasContractual = sendable.some((item) => isContractualType(item.type));
   const canSubmit = sendable.length > 0 && !submitting;
 
+  /** Volta ao envio (mantém seguradora e nome) depois do fim do processamento ou de uma falha. */
+  const restart = useCallback(() => {
+    setCreatedId(null);
+    setFiles([]);
+    setSubmitError(null);
+  }, []);
+
   const submit = async () => {
     if (!canSubmit) return;
     setSubmitting(true);
@@ -118,5 +125,6 @@ export function useNewPolicyForm() {
     replaceFile,
     changeType,
     submit,
+    restart,
   };
 }
