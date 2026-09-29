@@ -146,10 +146,12 @@ COVERAGE_TEXTS: dict[str, tuple[str, tuple[str, str], str]] = {
             "Consideram-se automaticamente Subsidiárias as sociedades constituídas ou adquiridas "
             "pelo {T} após o início da vigência cujo ativo total não exceda 25% (vinte e cinco "
             "por cento) do ativo consolidado do {T}. Acima desse percentual, a inclusão depende "
-            "de aceitação pela Seguradora e de eventual prêmio adicional. A extensão é concedida {lim}.",
+            "de aceitação pela Seguradora e de eventual prêmio adicional. "
+            "A extensão é concedida {lim}.",
             "As sociedades adquiridas ou constituídas durante a vigência passam a ser cobertas "
             "por 90 (noventa) dias, por atos posteriores à aquisição, prazo em que o {T} deverá "
-            "requerer a inclusão definitiva, sob pena de cessação da cobertura. A extensão é concedida {lim}.",
+            "requerer a inclusão definitiva, sob pena de cessação da cobertura. "
+            "A extensão é concedida {lim}.",
         ),
         "",
     ),
@@ -245,7 +247,7 @@ COVERAGE_TEXTS: dict[str, tuple[str, tuple[str, str], str]] = {
         (
             "Estão cobertas as indenizações por danos morais impostas ao {S} em decorrência de "
             "Reclamação coberta, {lim}.",
-            "A expressão “Perdas” compreende a condenação por dano moral, individual ou "
+            "A expressão “{P}” compreende a condenação por dano moral, individual ou "
             "coletivo, imposta ao {S} em Reclamação coberta, {lim}.",
         ),
         "",
@@ -436,14 +438,14 @@ POLLUTION_TEXTS: dict[str, tuple[str, ...]] = {
     "sidea_carveback": (
         "Ficam excluídas as Reclamações decorrentes de poluição, contaminação ou dano ambiental "
         "de qualquer natureza, inclusive as ordens de limpeza e remediação.",
-        "Em exceção à exclusão anterior, a Seguradora pagará as Perdas da Cobertura A do "
+        "Em exceção à exclusão anterior, a Seguradora pagará as {P} da {A} do "
         "{S} quando o {T} estiver impedido de indenizá-lo por insolvência ou por vedação "
         "legal, sem sublimite específico, excluídos os Custos de Defesa do {T}.",
     ),
     "standard": (
         "Ficam excluídas as Reclamações baseadas em poluição, assim entendida a presença, a "
         "emissão ou a liberação de Poluentes, e em custos de limpeza ou remediação.",
-        "A exclusão não se aplica à Cobertura A, nem às Reclamações de acionistas por queda no "
+        "A exclusão não se aplica à {A}, nem às Reclamações de acionistas por queda no "
         "valor de suas participações, desde que não fundadas em ordem de remediação.",
     ),
     "cleanup_only": (

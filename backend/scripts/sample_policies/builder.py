@@ -18,8 +18,20 @@ def brl(value: int) -> str:
     return f"R$ {formatted}"
 
 
+def days(count: int) -> str:
+    words = {15: "quinze", 30: "trinta", 45: "quarenta e cinco", 60: "sessenta", 90: "noventa"}
+    return f"{count} ({words.get(count, str(count))}) dias"
+
+
 def months(count: int) -> str:
-    words = {6: "seis", 12: "doze", 24: "vinte e quatro", 36: "trinta e seis", 60: "sessenta"}
+    words = {
+        3: "três",
+        6: "seis",
+        12: "doze",
+        24: "vinte e quatro",
+        36: "trinta e seis",
+        60: "sessenta",
+    }
     words.update({72: "setenta e dois", 84: "oitenta e quatro", 120: "cento e vinte"})
     return f"{count} ({words.get(count, str(count))}) meses"
 
@@ -33,12 +45,15 @@ class Clauses:
         self.number = 0
         self._item = 0
         self.ctx: dict[str, str] = {**asdict(spec.vocab)}
+        for letter in "ABC":
+            self.ctx[letter] = getattr(spec.vocab, f"{letter.lower()}_name").split(" –")[0]
 
     def pick(self, first: str, second: str) -> str:
         return first if self.spec.variant % 2 == 0 else second
 
     def fmt(self, text: str, **extra: str) -> str:
-        return text.format_map({**self.ctx, **extra})
+        once = text.format_map({**self.ctx, **extra})
+        return once.format_map(self.ctx) if "{" in once else once
 
     def clause(self, title: str) -> None:
         self.number += 1
@@ -82,6 +97,11 @@ def _coverage_items(c: Clauses, keys: tuple[str, ...]) -> list[str]:
             optional.append(_label(c.spec, key))
             continue
         text = texts[c.spec.variant % 2]
+        if "Custos de Defesa" in cov.limit:
+            text += (
+                " A cobertura limita-se aos Custos de Defesa; não se pagam indenizações, "
+                "multas ou condenações."
+            )
         c.item(f"{_label(c.spec, key)}. {text}", lim=_limit_phrase(c.spec, cov))
         if cov.note:
             c.sub(cov.note)
@@ -97,8 +117,8 @@ def _optional_text(c: Clauses, names: list[str]) -> None:
         "específico e pagamento de prêmio adicional. A menção ao termo nestas Condições Gerais "
         "não gera direito a indenização:"
     )
-    for name in names:
-        c.sub(f"• {name}.")
+    for index, name in enumerate(names):
+        c.sub(f"{chr(97 + index)}) {name}.")
 
 
 # ---------------------------------------------------------------- capa e quadro resumo
@@ -113,7 +133,7 @@ def _cover(spec: Spec) -> list[Block]:
             "subtitle",
             f"{spec.insurer} – CNPJ {spec.insurer_cnpj} – Código SUSEP {spec.insurer_susep}",
         ),
-        Block("p", f"{spec.insurer_address}. Ouvidoria: {spec.ouvidoria}."),
+        Block("note", f"{spec.insurer_address}. Ouvidoria: {spec.ouvidoria}."),
         Block(
             "table",
             table=Table(
@@ -161,6 +181,13 @@ def _cover(spec: Spec) -> list[Block]:
 def _limits_table(spec: Spec) -> Table:
     v = spec.vocab
     rows: list[tuple[str, ...]] = []
+    side_b = v.b_name.split(" –")[0]
+
+    def row(label: str, cov: Cov) -> tuple[str, ...]:
+        limit = cov.limit.replace("LMG", v.L_abbr)
+        deductible = cov.deductible.replace("Cobertura B", side_b)
+        return (label, STATUS_LABEL[cov.status], limit, deductible)
+
     core = (
         ("side_a", v.a_name),
         ("side_b", v.b_name),
@@ -169,13 +196,13 @@ def _limits_table(spec: Spec) -> Table:
     )
     for key, label in core:
         cov = spec.coverages[key]
-        rows.append((label, STATUS_LABEL[cov.status], cov.limit, cov.deductible))
+        rows.append(row(label, cov))
     keys = CLAUSE_4_KEYS + CLAUSE_5_KEYS
     for key in keys:
         cov = spec.coverages.get(key)
         if cov is None:
             continue
-        rows.append((_label(spec, key), STATUS_LABEL[cov.status], cov.limit, cov.deductible))
+        rows.append(row(_label(spec, key), cov))
     return Table(
         ("Cobertura", "Situação", "Limite / Sublimite", "Franquia"),
         tuple(rows),
@@ -206,7 +233,8 @@ def _summary(spec: Spec) -> list[Block]:
                 (
                     (
                         f"{v.L} ({v.L_abbr})",
-                        f"{brl(spec.lmg)} por vigência, em base agregada, para todas as Coberturas, "
+                        f"{brl(spec.lmg)} por vigência, em base agregada, para todas as "
+                        "Coberturas, "
                         "Perdas e Custos de Defesa, salvo quando indicado em contrário.",
                     ),
                     (
@@ -238,9 +266,9 @@ def _summary(spec: Spec) -> list[Block]:
             table=Table(
                 ("Item", "Condição"),
                 (
-                    ("Cobertura A", spec.franquia_a),
-                    ("Cobertura B e adicionais", spec.franquia_b),
-                    ("Cobertura C", spec.franquia_c),
+                    (v.a_name.split(" –")[0], spec.franquia_a),
+                    (f"{v.b_name.split(' –')[0]} e adicionais", spec.franquia_b),
+                    (v.c_name.split(" –")[0], spec.franquia_c),
                     ("Participação obrigatória do Segurado", spec.participacao),
                 ),
                 (0.34, 0.66),
@@ -277,7 +305,10 @@ def _retro_summary(spec: Spec) -> str:
     if spec.retro_style == "ilimitada":
         return "Retroatividade ilimitada, exceto fatos ou circunstâncias conhecidos."
     if spec.retro_style == "datada":
-        return f"Data de retroatividade: {spec.retro_value}. Atos anteriores a essa data não estão cobertos."
+        return (
+            f"Data de retroatividade: {spec.retro_value}. "
+            "Atos anteriores a essa data não estão cobertos."
+        )
     return f"Período de retroatividade de {spec.retro_value} anteriores ao início da vigência."
 
 
@@ -307,7 +338,7 @@ def _terms_table(spec: Spec) -> Table:
         ("Jurisdição", spec.jurisdiction),
         (
             "Notificação de circunstâncias",
-            f"Até {spec.notice_days} ({spec.notice_days}) dias após o conhecimento do fato ou "
+            f"Até {days(spec.notice_days)} após o conhecimento do fato ou "
             "circunstância, e sempre até o fim do prazo complementar.",
         ),
         ("Foro / solução de disputas", _forum_summary(spec)),
@@ -328,7 +359,7 @@ def _forum_summary(spec: Spec) -> str:
 
 # ---------------------------------------------------------------- condições gerais
 def _objeto_e_definicoes(c: Clauses) -> None:
-    s, v = c.spec, c.spec.vocab
+    s = c.spec
     c.clause("Objeto do seguro")
     c.item(
         "Este seguro garante, até o {L} ({L_abbr}) indicado na Especificação, o pagamento das "
@@ -490,16 +521,16 @@ def _basic_coverages(c: Clauses) -> None:
         )
     else:
         c.item(
-            "Não há Cobertura C. Estão excluídas as Reclamações contra o {T} como pessoa jurídica, "
+            "Não há {C}. Estão excluídas as Reclamações contra o {T} como pessoa jurídica, "
             "bem como as decorrentes de oferta, emissão ou negociação de valores mobiliários."
         )
     if s.side_a_dic:
         c.item(
-            f"Limite adicional exclusivo da Cobertura A (Difference in Conditions – DIC). Esgotado o "
+            f"Limite adicional exclusivo da {{A}} (Difference in Conditions – DIC). Esgotado o "
             f"{{L_abbr}}, ou quando a apólice não puder indenizar por recusa do {{T}}, a "
             f"Seguradora pagará ao {{S}} até {brl(s.side_a_dic)} adicionais, exclusivamente para "
             "Perdas não indenizadas pelo {T}. Esse valor não é compartilhado com o {T} nem "
-            "com a Cobertura B."
+            "com a {B}."
         )
 
 
@@ -559,20 +590,20 @@ def _limits(c: Clauses) -> None:
     c.item(
         "A Franquia do Quadro 2 é deduzida de cada Reclamação. Quando mais de uma Franquia "
         "for aplicável a um mesmo Sinistro, prevalecerá a maior. Não se aplica Franquia aos "
-        "Custos de Defesa da Cobertura A."
+        "Custos de Defesa da {A}."
     )
     c.item(
         "Ordem de pagamento. Existindo Reclamações simultâneas, a Seguradora pagará primeiro as "
-        "{P} da Cobertura A, depois as da Cobertura B e, por último, as demais coberturas, "
-        "podendo suspender pagamentos da Cobertura B ou C, para não comprometer o {L_abbr} "
+        "{P} da {A}, depois as da {B} e, por último, as demais coberturas, "
+        "podendo suspender pagamentos da {B} ou da {C}, para não comprometer o {L_abbr} "
         "em prejuízo dos {S_pl}."
     )
     c.item(
         "Esgotado o {L_abbr}, cessam todas as obrigações da Seguradora, inclusive o adiantamento "
-        "de Custos de Defesa, salvo o Limite adicional da Cobertura A, se contratado.",
+        "de Custos de Defesa, salvo o Limite adicional da {A}, se contratado.",
     )
     if not s.side_a_dic:
-        c.item("Não há reinstalação de limite nem limite adicional exclusivo da Cobertura A.")
+        c.item("Não há reinstalação de limite nem limite adicional exclusivo da {A}.")
 
 
 def _vigencia(c: Clauses) -> None:
@@ -634,17 +665,21 @@ def _vigencia(c: Clauses) -> None:
         )
     if s.runoff_months:
         c.item(f"Cauda / run-off. {s.runoff_text}")
-    for key, title in (
-        ("aposentados", "Segurados aposentados"),
-        ("demissao", "Demissão voluntária e desligamento"),
+    for key, title, who in (
+        (
+            "aposentados",
+            "Segurados aposentados",
+            "se aposentar ou deixar o cargo por término de mandato",
+        ),
+        ("demissao", "Demissão voluntária e desligamento", "se desligar por demissão voluntária"),
     ):
         cov = s.coverages.get(key)
         if cov is None:
             continue
         if cov.status == "C":
             c.item(
-                f"{title}. O {{S}} que se aposentar, se desligar por demissão voluntária ou "
-                f"deixar o cargo durante a vigência terá Prazo Complementar de {cov.limit} "
+                f"{title}. O {{S}} que, durante a vigência, {who} terá Prazo Complementar de "
+                f"{cov.limit} "
                 "para Reclamações por atos anteriores ao desligamento, independentemente da "
                 "renovação da apólice."
             )
@@ -738,12 +773,12 @@ def _specific_exclusions(c: Clauses) -> None:
             "Dados e sistemas. Ficam excluídas Reclamações por violação de segurança de "
             "sistemas, vazamento ou tratamento indevido de dados pessoais (Lei 13.709/2018 – "
             "LGPD), ataque cibernético e falha de tecnologia, salvo Custos de Defesa do {S} "
-            "pela Cobertura A, quando decorrentes de falha de supervisão da administração."
+            "pela {A}, quando decorrentes de falha de supervisão da administração."
         )
     if s.coverages["side_c"].status == "E":
         c.item(
             "Valores mobiliários. Não estão cobertas Reclamações relativas à oferta pública ou "
-            "privada de valores mobiliários do {T}, ressalvada a Cobertura A do {S}."
+            "privada de valores mobiliários do {T}, ressalvada a {A} do {S}."
         )
 
 
@@ -752,7 +787,7 @@ def _notificacao(c: Clauses) -> None:
     c.clause("Notificação de Reclamações e Circunstâncias")
     c.item(
         f"O {{T}} ou o {{S}} deverá notificar a Seguradora, por escrito, de qualquer Reclamação "
-        f"assim que dela tomar conhecimento e em até {s.notice_days} ({s.notice_days}) dias, "
+        f"assim que dela tomar conhecimento e em até {days(s.notice_days)}, "
         "e sempre até o fim da vigência ou do Prazo Complementar, o que ocorrer primeiro."
     )
     c.item(
@@ -786,7 +821,8 @@ def _sinistro(c: Clauses) -> None:
         "A Seguradora tem 30 (trinta) dias, contados da entrega de todos os documentos, para "
         "se manifestar sobre a cobertura. O pedido de documentos complementares suspende "
         "esse prazo uma única vez. O pagamento será feito em até 30 (trinta) dias da decisão, "
-        "sob pena de atualização monetária pelo IPCA e juros moratórios de 1% (um por cento) ao mês."
+        "sob pena de atualização monetária pelo IPCA e juros moratórios de 1% (um por cento) "
+        "ao mês."
     )
 
 
@@ -833,7 +869,8 @@ def _final_clauses(c: Clauses) -> None:
         "O {T} e o {S} declaram ser verdadeiras as informações da proposta, base desta "
         "apólice. Nos termos dos arts. 765 e 766 do Código Civil, a omissão ou inexatidão "
         "de má-fé, ou que influa na aceitação ou no prêmio, implica perda do direito à "
-        "garantia. Se sem má-fé, a indenização será reduzida proporcionalmente à diferença de prêmio."
+        "garantia. Se sem má-fé, a indenização será reduzida proporcionalmente à diferença "
+        "de prêmio."
     )
     c.item(
         "O {T} comunicará à Seguradora, em até 15 (quinze) dias, fusão, incorporação, cisão, "
@@ -920,7 +957,8 @@ def _final_clauses(c: Clauses) -> None:
         "www.gov.br/susep."
     )
     c.item(
-        f"Corretor: {s.corretor}. O corretor indicado é o intermediário da contratação, sem poderes "
+        f"Corretor: {s.corretor}. O corretor indicado é o intermediário da contratação, sem "
+        "poderes "
         "para alterar estas Condições."
     )
 
