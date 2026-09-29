@@ -11,12 +11,14 @@ import {
 import { describeProcessing, isDocumentBusy, isPolicyBusy } from '../../shared/processing';
 import { documentStatusTone, policyStatusTone } from '../../shared/tones';
 import type { PolicySummary } from '../../types/domain';
+import { DeletePolicyButton } from './DeletePolicyButton';
 
 type PolicyCardProps = {
   policy: PolicySummary;
+  onDeleted: (policy: PolicySummary) => void;
 };
 
-export function PolicyCard({ policy }: PolicyCardProps) {
+export function PolicyCard({ policy, onDeleted }: PolicyCardProps) {
   const comparable = COMPARABLE_POLICY_STATUSES.includes(policy.status);
   return (
     <article className="card policy-card" aria-labelledby={`policy-${policy.id}`}>
@@ -71,6 +73,7 @@ export function PolicyCard({ policy }: PolicyCardProps) {
       )}
 
       <div className="policy-card__actions">
+        <DeletePolicyButton policy={policy} onDeleted={() => onDeleted(policy)} />
         <a className="btn btn--ghost" href={paths.policy(policy.id)}>
           Ver evidências
         </a>

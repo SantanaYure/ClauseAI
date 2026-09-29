@@ -110,3 +110,40 @@ def test_validation_errors_use_the_error_envelope(tmp_path: Path) -> None:
             "correlation_id": "c1",
             "details": None,
         }
+
+
+def test_delete_policy_removes_record_and_files(tmp_path: Path) -> None:
+    with TestClient(build_test_app(tmp_path)) as client:
+        policy_id = upload(client, ["POLICY", "GENERAL_CONDITIONS"])
+        wait_for(client, f"/api/v1/policies/{policy_id}", {"READY", "ATTENTION", "FAILED"})
+        assert list(tmp_path.rglob("*.pdf"))
+
+        deleted = client.delete(f"/api/v1/policies/{policy_id}")
+
+        assert deleted.status_code == 204
+        assert client.get(f"/api/v1/policies/{policy_id}").status_code == 404
+        assert client.get("/api/v1/policies").json()["items"] == []
+        assert not list(tmp_path.rglob("*.pdf"))
+
+        again = client.delete(f"/api/v1/policies/{policy_id}")
+        assert again.status_code == 404
+        assert again.json()["error"]["code"] == "POLICY_NOT_FOUND"
+
+
+def test_comparisons_stay_in_history_after_policy_deletion(tmp_path: Path) -> None:
+    with TestClient(build_test_app(tmp_path)) as client:
+        policy_a = upload(client, ["POLICY"])
+        policy_b = upload(client, ["POLICY"])
+        for policy_id in (policy_a, policy_b):
+            wait_for(client, f"/api/v1/policies/{policy_id}", {"READY", "ATTENTION", "FAILED"})
+        created = client.post(
+            "/api/v1/comparisons", json={"policy_a_id": policy_a, "policy_b_id": policy_b}
+        ).json()
+        url = f"/api/v1/comparisons/{created['comparison_id']}"
+        wait_for(client, url, {"COMPLETED", "PARTIAL", "FAILED"})
+
+        assert client.delete(f"/api/v1/policies/{policy_a}").status_code == 204
+
+        comparison = client.get(url).json()
+        assert comparison["status"] == "COMPLETED"
+        assert len(comparison["items"]) == 31

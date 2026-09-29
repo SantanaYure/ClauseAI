@@ -11,6 +11,7 @@ import { hasBusyPolicy, PROCESSING_POLL_MS } from '../../shared/processing';
 import { useApiData } from '../../shared/useApiData';
 import type { PolicyStatus, PolicySummary } from '../../types/domain';
 import { PolicyCard } from './PolicyCard';
+import { takeFlash } from '../../shared/flash';
 
 type Filter = 'ALL' | PolicyStatus;
 
@@ -37,6 +38,7 @@ function matches(policy: PolicySummary, filter: Filter, query: string): boolean 
 }
 
 export function PoliciesPage() {
+  const [flash, setFlashMessage] = useState(takeFlash);
   const state = useApiData('policies', () => clauseApi.listPolicies(), {
     pollMs: PROCESSING_POLL_MS,
     shouldPoll: hasBusyPolicy,
@@ -58,6 +60,12 @@ export function PoliciesPage() {
         subtitle="Cada apólice reúne seus documentos: apólice, especificação, condições e endossos."
         action={action}
       />
+      {flash && (
+        <p className="flash" role="status">
+          <Icon name="checkCircle" size={18} />
+          {flash}
+        </p>
+      )}
       <SearchField
         label="Buscar apólices"
         placeholder="Buscar por seguradora, número ou arquivo"
@@ -80,14 +88,22 @@ export function PoliciesPage() {
               ).length,
             }))}
           />
-          <PolicyList policies={state.data.filter((policy) => matches(policy, filter, query))} />
+          <PolicyList
+            policies={state.data.filter((policy) => matches(policy, filter, query))}
+            onDeleted={(policy) => setFlashMessage(`Apólice ${policy.insurer} excluída.`)}
+          />
         </>
       )}
     </div>
   );
 }
 
-function PolicyList({ policies }: { policies: PolicySummary[] }) {
+type PolicyListProps = {
+  policies: PolicySummary[];
+  onDeleted: (policy: PolicySummary) => void;
+};
+
+function PolicyList({ policies, onDeleted }: PolicyListProps) {
   if (!policies.length) {
     return (
       <EmptyState
@@ -105,7 +121,7 @@ function PolicyList({ policies }: { policies: PolicySummary[] }) {
   return (
     <div className="stack">
       {policies.map((policy) => (
-        <PolicyCard key={policy.id} policy={policy} />
+        <PolicyCard key={policy.id} policy={policy} onDeleted={onDeleted} />
       ))}
     </div>
   );

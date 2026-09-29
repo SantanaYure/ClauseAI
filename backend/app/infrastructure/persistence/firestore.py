@@ -46,6 +46,16 @@ class FirestorePolicyRepository:
     async def list_recent(self, limit: int) -> list[Policy]:
         return await asyncio.to_thread(self._list, limit)
 
+    async def delete(self, policy_id: str) -> None:
+        await asyncio.to_thread(self._delete, policy_id)
+
+    def _delete(self, policy_id: str) -> None:
+        reference = self._collection.document(policy_id)
+        # Firestore does not delete subcollections with the parent document.
+        for occurrence in reference.collection("concept_occurrences").list_documents():
+            occurrence.delete()
+        reference.delete()
+
     def _list(self, limit: int) -> list[Policy]:
         query = self._collection.order_by("created_at", direction="DESCENDING").limit(limit)
         policies: list[Policy] = []

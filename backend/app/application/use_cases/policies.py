@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from uuid import uuid4
 
 from app.application.commands import CreatePolicyCommand, UploadedFile
-from app.application.errors import invalid, not_found
+from app.application.errors import conflict, invalid, not_found
 from app.domain.entities import (
     ConceptOccurrence,
     DocumentIntake,
@@ -263,6 +263,26 @@ class PolicyService:
         if policy is None:
             raise not_found("POLICY_NOT_FOUND", "Apólice não encontrada.")
         return policy
+
+    async def delete_policy(self, policy_id: str) -> None:
+        """Delete the policy, its evidence and its original files.
+
+        Comparisons already made stay in the history: they keep a copy of the
+        evidence they used. A policy still being processed cannot be deleted, or
+        the worker would save it again.
+        """
+
+        policy = await self.get_policy(policy_id)
+        if policy.status == PolicyStatus.PROCESSING:
+            raise conflict(
+                "POLICY_PROCESSING",
+                "A apólice ainda está em processamento. Aguarde a conclusão para excluí-la.",
+            )
+        for document in policy.documents:
+            await self._storage.delete(document.storage_key)
+        await self._repository.delete(policy_id)
+        with log_context(policy_id=policy_id, correlation_id=policy.correlation_id):
+            logger.info("Policy deleted")
 
     async def list_policies(self, limit: int) -> list[Policy]:
         return await self._repository.list_recent(limit)

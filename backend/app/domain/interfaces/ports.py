@@ -26,6 +26,10 @@ class BlobStorage(Protocol):
 
     async def get(self, key: str) -> bytes: ...
 
+    async def delete(self, key: str) -> None:
+        """Remove the object; deleting a missing key is not an error."""
+        ...
+
 
 class PolicyRepository(Protocol):
     async def save(self, policy: Policy) -> None: ...
@@ -33,6 +37,8 @@ class PolicyRepository(Protocol):
     async def get(self, policy_id: str) -> Policy | None: ...
 
     async def list_recent(self, limit: int) -> list[Policy]: ...
+
+    async def delete(self, policy_id: str) -> None: ...
 
 
 class ComparisonRepository(Protocol):

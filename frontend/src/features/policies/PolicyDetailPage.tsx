@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { paths } from '../../app/router';
+import { navigate, paths } from '../../app/router';
 import { Badge } from '../../components/Badge';
 import { BrokerNotice } from '../../components/BrokerNotice';
 import { EvidenceQuote } from '../../components/EvidenceQuote';
@@ -27,6 +27,8 @@ import {
 import { contractTone, documentStatusTone, policyStatusTone } from '../../shared/tones';
 import { useApiData } from '../../shared/useApiData';
 import type { Concept, ConceptOccurrence, ContractStatus, PolicyDetail } from '../../types/domain';
+import { setFlash } from '../../shared/flash';
+import { DeletePolicyButton } from './DeletePolicyButton';
 
 type Filter = 'ALL' | ContractStatus;
 
@@ -135,6 +137,15 @@ function PolicyDetailView({ policy, concepts, back }: ViewProps) {
           Comparar esta apólice
         </a>
       )}
+
+      <DeletePolicyButton
+        policy={policy}
+        variant="block"
+        onDeleted={() => {
+          setFlash(`Apólice ${policy.insurer} excluída.`);
+          navigate(paths.policies);
+        }}
+      />
 
       <section aria-labelledby="docs-title">
         <h2 id="docs-title" className="section-title">

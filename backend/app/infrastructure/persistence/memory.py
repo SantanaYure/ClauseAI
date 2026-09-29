@@ -21,6 +21,9 @@ class InMemoryPolicyRepository:
         ordered = sorted(self._items.values(), key=lambda p: p.created_at, reverse=True)
         return [policy.model_copy(deep=True) for policy in ordered[:limit]]
 
+    async def delete(self, policy_id: str) -> None:
+        self._items.pop(policy_id, None)
+
 
 class InMemoryComparisonRepository:
     def __init__(self) -> None:

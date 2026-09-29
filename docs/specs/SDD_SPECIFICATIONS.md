@@ -218,15 +218,15 @@ Política para múltiplas apólices no mesmo documento: `PENDING_BUSINESS_VALIDA
 
 Upsert, concorrência, schema incompatível, consistência de evidências.
 
-## SPEC-006 — Consulta da apólice
+## SPEC-006 — Consulta e exclusão da apólice
 
 ### Objetivo e contexto
 
-Permitir leitura de apólices prontas e suas evidências.
+Permitir leitura de apólices prontas e suas evidências, e a exclusão de apólices que o usuário não quer mais manter.
 
 ### Comportamento, entradas e saídas
 
-`GET /policies` lista resumidos; `GET /policies/{id}` retorna estrutura completa, status e ambiguidades.
+`GET /policies` lista resumidos; `GET /policies/{id}` retorna estrutura completa, status e ambiguidades. `DELETE /policies/{id}` apaga a apólice, suas ocorrências e evidências e os arquivos originais, e responde `204`.
 
 ### Dependências
 
@@ -234,7 +234,7 @@ Permitir leitura de apólices prontas e suas evidências.
 
 ### Regras e erros
 
-Não retornar policy em estado não pronto como se fosse final; usar `409 POLICY_NOT_READY`; respeitar limites de página e tamanho.
+Não retornar policy em estado não pronto como se fosse final; usar `409 POLICY_NOT_READY`; respeitar limites de página e tamanho. A exclusão exige confirmação explícita na interface, não é permitida enquanto a apólice estiver em processamento (`409 POLICY_PROCESSING`) e não altera comparações já concluídas, que guardam cópia das evidências usadas.
 
 ### Critérios de aceite
 
@@ -242,10 +242,13 @@ Não retornar policy em estado não pronto como se fosse final; usar `409 POLICY
 - ID inexistente retorna `404` com envelope padrão.
 - Lista pagina sem carregar todos os registros.
 - DTO não expõe raw response nem segredo.
+- Exclusão remove registro, evidências e arquivos; nova consulta retorna `404`.
+- Apólice em processamento não pode ser excluída.
+- Comparações anteriores continuam consultáveis no Histórico.
 
 ### Fora de escopo
 
-Busca full-text e edição.
+Busca full-text, edição e lixeira para restaurar apólices excluídas.
 
 ### Questões abertas
 

@@ -137,7 +137,7 @@ Limitar listas, tamanho de payload e paginação. O cliente não deve buscar tod
 
 Base path: `/api/v1`. Todos os endpoints aceitam e respondem JSON, exceto o upload multipart. Respostas de criação assíncrona usam `202 Accepted`. Documentação interativa em `/api/v1/docs`.
 
-Implementados: `POST/GET /policies`, `GET /policies/{id}`, `POST/GET /comparisons`, `GET /comparisons/{id}`, `GET /concepts`, `GET /concepts/{id}`, `GET /concepts/{id}/occurrences` e `POST /queries`. Os endpoints `/documents` abaixo continuam planejados: no MVP, os documentos são enviados e consultados pela apólice.
+Implementados: `POST/GET /policies`, `GET/DELETE /policies/{id}`, `POST/GET /comparisons`, `GET /comparisons/{id}`, `GET /concepts`, `GET /concepts/{id}`, `GET /concepts/{id}/occurrences` e `POST /queries`. Os endpoints `/documents` abaixo continuam planejados: no MVP, os documentos são enviados e consultados pela apólice.
 
 ### POST `/policies`
 
@@ -211,6 +211,12 @@ Estados públicos: `UPLOADED`, `PROCESSING`, `EXTRACTING`, `VALIDATING`, `COMPLE
 **Query:** `status?`, `document_id?`, `limit`, `cursor`.
 
 **Response `200`:** item resumido com `policy_id`, `document_id`, seguradora se disponível, vigência se disponível e `status`.
+
+### DELETE `/policies/{policy_id}`
+
+**Objetivo:** excluir a apólice, as ocorrências e evidências (inclusive a subcoleção `concept_occurrences`) e os arquivos originais no armazenamento.
+
+**Responses:** `204` sem corpo; `404 POLICY_NOT_FOUND`; `409 POLICY_PROCESSING` enquanto a apólice estiver em processamento. As comparações concluídas não são alteradas.
 
 ### GET `/policies/{policy_id}`
 

@@ -316,6 +316,25 @@ $tones: danger, high, medium, success, muted, info, neutral;
     }
   }
 
+  &--danger {
+    background: var(--tone-danger-edge);
+    color: #ffffff;
+
+    &:not(:disabled):hover {
+      background: var(--tone-danger-text);
+    }
+  }
+
+  &--danger-ghost {
+    border-color: var(--tone-danger-bg);
+    background: transparent;
+    color: var(--tone-danger-text);
+
+    &:not(:disabled):hover {
+      background: var(--tone-danger-bg);
+    }
+  }
+
   &--block {
     width: 100%;
     min-height: 3.25rem;
@@ -1547,4 +1566,72 @@ $tones: danger, high, medium, success, muted, info, neutral;
     font-size: var(--font-size-sm);
     text-align: right;
   }
+}
+
+// ---------- Diálogo de confirmação ----------
+
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: var(--space-4);
+  background: rgba(22, 23, 26, 0.55);
+
+  @include tablet {
+    align-items: center;
+  }
+}
+
+.dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: 100%;
+  max-width: 28rem;
+  padding: var(--space-5);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg);
+  box-shadow: var(--shadow-md);
+}
+
+.dialog__title {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  color: var(--tone-danger-text);
+  font-size: var(--font-size-lg);
+  font-weight: 800;
+}
+
+.dialog__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+}
+
+.dialog__actions {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: var(--space-2);
+
+  @include tablet {
+    flex-direction: row;
+    justify-content: flex-end;
+  }
+}
+
+.flash {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--tone-success-bg);
+  color: var(--tone-success-text);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
 }

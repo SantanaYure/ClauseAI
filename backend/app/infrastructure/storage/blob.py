@@ -36,6 +36,15 @@ class FirebaseBlobStorage:
         data: bytes = await asyncio.to_thread(blob.download_as_bytes)
         return data
 
+    async def delete(self, key: str) -> None:
+        from google.api_core.exceptions import NotFound
+
+        blob = self._bucket.blob(key)
+        try:
+            await asyncio.to_thread(blob.delete)
+        except NotFound:
+            return
+
 
 class LocalBlobStorage:
     """Local folder, used when PERSISTENCE_BACKEND=memory."""
@@ -59,3 +68,6 @@ class LocalBlobStorage:
 
     async def get(self, key: str) -> bytes:
         return await asyncio.to_thread(self._path(key).read_bytes)
+
+    async def delete(self, key: str) -> None:
+        await asyncio.to_thread(self._path(key).unlink, missing_ok=True)

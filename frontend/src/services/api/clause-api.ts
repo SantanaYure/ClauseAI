@@ -131,6 +131,12 @@ export const clauseApi = {
     return request(`/policies/${encodeURIComponent(policyId)}`);
   },
 
+  /** Exclui a apólice, suas evidências e os arquivos originais. */
+  async deletePolicy(policyId: string): Promise<void> {
+    await request<void>(`/policies/${encodeURIComponent(policyId)}`, { method: 'DELETE' });
+    notifyChange();
+  },
+
   async createPolicy(input: NewPolicyInput): Promise<{ policyId: string }> {
     const form = new FormData();
     if (input.insurer.trim()) form.append('insurer', input.insurer.trim());
