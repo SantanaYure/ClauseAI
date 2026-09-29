@@ -31,10 +31,10 @@ npm run build
 
 ## Variáveis de ambiente
 
-| Variável | Padrão | Uso |
-|---|---|---|
-| `VITE_API_BASE_URL` | `http://localhost:8000` | Backend. Pode mudar sem alterar os componentes |
-| `VITE_UPLOAD_TIMEOUT_MS` | `300000` (5 min) | Tempo máximo do envio de arquivos |
-| `VITE_MAX_UPLOAD_MB` | `20` | Tamanho máximo por arquivo na validação local. Deve espelhar `MAX_UPLOAD_MB` do backend |
+| Variável                 | Padrão                  | Uso                                                                                     |
+| ------------------------ | ----------------------- | --------------------------------------------------------------------------------------- |
+| `VITE_API_BASE_URL`      | `http://localhost:8000` | Backend. Pode mudar sem alterar os componentes                                          |
+| `VITE_UPLOAD_TIMEOUT_MS` | `300000` (5 min)        | Tempo máximo do envio de arquivos                                                       |
+| `VITE_MAX_UPLOAD_MB`     | `20`                    | Tamanho máximo por arquivo na validação local. Deve espelhar `MAX_UPLOAD_MB` do backend |
 
 Regras de envio, processamento, escolha das apólices e resultado: SPEC-010.
