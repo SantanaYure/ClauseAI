@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 import { ApiError, dataEvents } from '../services/api/clause-api';
+import { isRetryableCode } from './apiErrors';
 
 export type LoadState<T> =
   { status: 'loading' } | { status: 'error'; message: string } | { status: 'success'; data: T };
 
-type KeyedState<T> = { key: string; state: LoadState<T> };
+type KeyedState<T> = { key: string; state: LoadState<T>; refreshFailed?: boolean };
 
 type Options<T> = {
   /** Intervalo de atualização enquanto `shouldPoll` for verdadeiro (SPEC-014). */
@@ -29,7 +30,7 @@ export function useApiData<T>(
   key: string,
   load: () => Promise<T>,
   options: Options<T> = {},
-): LoadState<T> & { reload: () => void } {
+): LoadState<T> & { reload: () => void; refreshFailed: boolean } {
   const version = useSyncExternalStore(dataEvents.subscribe, dataEvents.getVersion);
   const [attempt, setAttempt] = useState(0);
   const [current, setCurrent] = useState<KeyedState<T> | null>(null);
@@ -41,7 +42,14 @@ export function useApiData<T>(
         if (active) setCurrent({ key, state: { status: 'success', data } });
       })
       .catch((error: unknown) => {
-        if (active) setCurrent({ key, state: { status: 'error', message: describeError(error) } });
+        if (!active) return;
+        // Falha de rede numa atualização: mantém o que já foi carregado e tenta de novo.
+        const transient = error instanceof ApiError && isRetryableCode(error.code);
+        setCurrent((previous) =>
+          transient && previous?.key === key && previous.state.status === 'success'
+            ? { ...previous, refreshFailed: true }
+            : { key, state: { status: 'error', message: describeError(error) } },
+        );
       });
     return () => {
       active = false;
@@ -68,5 +76,6 @@ export function useApiData<T>(
     setAttempt((value) => value + 1);
   }, []);
 
-  return { ...state, reload };
+  const refreshFailed = current?.key === key && current.refreshFailed === true;
+  return { ...state, reload, refreshFailed };
 }
