@@ -62,7 +62,7 @@ Sequência recomendada para uma pessoa. Cada fase só avança quando sua defini�
 
 - **Objetivo:** obter JSON rastreável de documentos reais.
 - **Dependências:** Fases 3, 5 e 6; acesso aos providers.
-- **Entregável:** AI Orchestrator, leitor de PDF nativo (DOCX em I-01), Gemini adapter (OCR multimodal), `P-INTAKE-001`, `P-EXTRACT-001`, `P-NORMALIZE-001`, schema v1, retries, `ExtractionResult`, `Evidence` e `ConceptOccurrence`.
+- **Entregável:** AI Orchestrator, leitor de PDF nativo (DOCX em I-01; leitura em faixas de páginas; modo de IA local para desenvolvimento, ADR-026), Gemini adapter (OCR multimodal), `P-INTAKE-001`, `P-EXTRACT-001`, `P-NORMALIZE-001`, schema v1, retries, `ExtractionResult`, `Evidence` e `ConceptOccurrence`.
 - **Definition of Done:** golden fixtures produzem payload validado ou falha explícita; PDF pesquisável, PDF digitalizado e imagem cobertos; injection, ausência e Condições Gerais isoladas cobertas; os 31 conceitos ponderados são pesquisados.
 - **Pode ser mockado:** Gemini em unit/integration; respostas reais só em testes controlados.
 - **Equipe de seguros:** revisar variantes de DO-036 a DO-044.
@@ -145,8 +145,10 @@ Estados: `Documentado` (spec e ADR prontos), `Em andamento`, `Concluído`. Só m
 
 | ID | Incremento | Referências | Estado |
 |---|---|---|---|
-| I-01 | Suporte a DOCX: detecção por conteúdo, leitura local sem OCR, origem estável da evidência (seção/bloco), erros classificados, comparação PDF × DOCX | ADR-024; SPEC-001 a SPEC-004 | Documentado. Backend em andamento. Pendente: formato exato da origem da evidência |
+| I-01 | Suporte a DOCX: detecção por conteúdo, leitura local sem OCR, origem estável da evidência (bloco lógico), erros classificados, comparação PDF × DOCX | ADR-024; SPEC-001 a SPEC-004 | Backend entregue (leitor, erros classificados, testes unitários). Pendente: validação do `qa`, rótulo "bloco" na interface e comparação PDF × DOCX ponta a ponta. Limitações conhecidas abaixo |
 | I-02 | Remake visual e identidade de marca: fontes, cores, selos, navegação, envio com validação, processamento em 3 passos, slots A e B, resultado em ordem fixa | ADR-025; SPEC-007, SPEC-010, SPEC-019 | Documentado. Frontend em andamento. Pendente: disposição final de "Ver cálculo" |
+
+Limitações conhecidas de I-01 (evolução futura): o leitor de DOCX não extrai a numeração automática de listas e cláusulas do Word (`numbering.xml`), notas de rodapé nem caixas de texto. Evidências que dependam desses elementos podem perder o número da cláusula ou o texto. Detalhes na SPEC-004.
 
 Definição de pronto: critérios de aceite das specs citadas passam, incluindo uma comparação PDF × DOCX ponta a ponta e a revisão de contraste da nova paleta.
 
@@ -158,4 +160,5 @@ Definição de pronto: critérios de aceite das specs citadas passam, incluindo 
 4. múltiplas apólices/documento e versionamento;
 5. comparação de mais de duas apólices e edição de pesos pelo usuário com trilha de auditoria;
 6. exportação e auditoria avançada;
-7. circuit breaker, tracing distribuído e escala horizontal.
+7. circuit breaker, tracing distribuído e escala horizontal;
+8. DOCX: extrair numeração automática de listas e cláusulas (`numbering.xml`), notas de rodapé e caixas de texto.

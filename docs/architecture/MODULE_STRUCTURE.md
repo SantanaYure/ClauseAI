@@ -23,6 +23,7 @@ ClauseAI/
 │   │   │   ├── storage/
 │   │   │   ├── ai/
 │   │   │   │   ├── gemini_client.py  # cliente único: extração, avaliação e conclusão
+│   │   │   │   ├── local.py       # IA determinística para desenvolvimento (AI_PROVIDER=local)
 │   │   │   │   └── prompts/       # P-SYSTEM, P-INTAKE, P-EXTRACT, P-NORMALIZE, P-ASSESS, P-EXECUTIVE, P-QUERY
 │   │   │   ├── pdf/               # leitura nativa de PDF
 │   │   │   ├── word/              # leitura local de DOCX, sem OCR

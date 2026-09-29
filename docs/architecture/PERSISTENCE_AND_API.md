@@ -58,9 +58,9 @@ Carregada a partir de [`domain/DO_KNOWLEDGE_BASE.md`](../domain/DO_KNOWLEDGE_BAS
 
 ### `evidences`
 
-`evidence_id`, `document_id`, `page`, `section_ref`, `clause_ref`, `literal_text`, `content_kind`, `extraction_method`, `confidence`, `low_confidence`, `version`. Registros não são sobrescritos; correções criam nova versão.
+`evidence_id`, `document_id`, `page`, `clause_ref`, `literal_text`, `content_kind`, `extraction_method`, `confidence`, `low_confidence`, `version`. Registros não são sobrescritos; correções criam nova versão.
 
-**Origem em DOCX.** DOCX não tem páginas fixas. `page` fica `null` e a origem vem de `section_ref` (título da seção) e da posição do bloco no documento. `page` só é preenchida quando o arquivo tem quebra de página explícita. `extraction_method` é `NATIVE`. A origem é estável: o mesmo arquivo gera sempre a mesma origem. Nomes e formato exatos dos campos de bloco: pendente de confirmação (backend-specialist).
+**Origem em DOCX.** DOCX não tem páginas fixas. O backend divide o texto em blocos lógicos numerados a partir de 1, e o número do bloco vai em `page`. Um bloco novo começa em quebra de página explícita, quebra de seção que inicia página ou a cada 3.500 caracteres, sempre entre parágrafos. A numeração é determinística: o mesmo arquivo gera sempre os mesmos blocos. `extraction_method` é `NATIVE`. Não existe `section_ref` no modelo de evidência atual. A interface mostra "bloco" para DOCX (SPEC-004).
 
 ### `documents/{document_id}`
 
@@ -87,7 +87,7 @@ Carregada a partir de [`domain/DO_KNOWLEDGE_BASE.md`](../domain/DO_KNOWLEDGE_BAS
 }
 ```
 
-`file_kind` aceita `SEARCHABLE_PDF`, `SCANNED_PDF`, `IMAGE` e `DOCX`. Em DOCX, `ocr_required` é sempre `false` e `page_count` pode ser `null` (não há páginas fixas).
+`file_kind` aceita `SEARCHABLE_PDF`, `SCANNED_PDF`, `IMAGE` e `DOCX`. Em DOCX, `ocr_required` é sempre `false` e `page_count` é o total de blocos lógicos (não há páginas fixas).
 
 ### `processing_jobs`
 
@@ -170,17 +170,22 @@ Implementados: `POST/GET /policies`, `GET/DELETE /policies/{id}`, `POST/GET /com
 }
 ```
 
-**Erros:** `400 INVALID_FILE`, `413 FILE_TOO_LARGE`, `415 UNSUPPORTED_MEDIA_TYPE`, `422 INVALID_METADATA`, `503 STORAGE_UNAVAILABLE`.
+**Erros:** `400 INVALID_FILE`, `413 FILE_TOO_LARGE`, `415 UNSUPPORTED_MEDIA_TYPE`, `422` (`DOCX_PROTECTED`, `DOCX_CORRUPTED`, `PDF_PROTECTED`, `PDF_CORRUPTED`, `INVALID_METADATA`), `503 STORAGE_UNAVAILABLE`.
 
-**Formatos e detalhe do erro.** Aceitos: `application/pdf`, `image/jpeg`, `image/png` e `application/vnd.openxmlformats-officedocument.wordprocessingml.document` (DOCX). O tipo vem do conteúdo: DOCX é um zip com `[Content-Types].xml` e `word/document.xml`. Os códigos de erro não mudam; o detalhe vai em `message`, em português:
+**Formatos e detalhe do erro.** Aceitos: `application/pdf`, `image/jpeg`, `image/png` e `application/vnd.openxmlformats-officedocument.wordprocessingml.document` (DOCX). O tipo vem do conteúdo: DOCX é um zip com `[Content_Types].xml` e `word/document.xml`. A mensagem vem em português:
 
-| Situação | Código | `message` (exemplo) |
+| Situação | HTTP e código | `message` |
 |---|---|---|
-| Documento corrompido | `400 INVALID_FILE` | "O arquivo está corrompido e não pode ser lido." |
-| Documento protegido por senha | `400 INVALID_FILE` | "O arquivo está protegido por senha. Envie uma cópia sem senha." |
-| Tipo não suportado | `415 UNSUPPORTED_MEDIA_TYPE` | "Tipo de arquivo não suportado. Envie PDF, JPG, PNG ou DOCX." |
+| DOCX protegido por senha ou `.doc` legado | `422 DOCX_PROTECTED` | "O arquivo {nome} está protegido por senha ou está em formato antigo (.doc). Remova a proteção e envie novamente como .docx." |
+| DOCX corrompido | `422 DOCX_CORRUPTED` | "O arquivo {nome} está corrompido e não pôde ser aberto. Gere o DOCX novamente." |
+| PDF protegido por senha | `422 PDF_PROTECTED` | "O arquivo {nome} está protegido por senha. Remova a proteção e envie novamente." |
+| PDF corrompido | `422 PDF_CORRUPTED` | "O arquivo {nome} está corrompido e não pôde ser aberto. Gere o PDF novamente." |
+| Zip acima de 20 × `MAX_UPLOAD_MB` descompactado | `413 FILE_TOO_LARGE` | "O conteúdo do arquivo {nome} excede o limite permitido." |
+| XLSX, PPTX, `.docm`, `.dotx`, outros zips e arquivo renomeado | `415 UNSUPPORTED_MEDIA_TYPE` | "Formato não aceito: {nome}. Use PDF, DOCX, JPG ou PNG." |
 
-Pendente de confirmação: texto e código HTTP finais, principalmente o de arquivo protegido por senha.
+As regras de decisão entre "protegido", "corrompido" e "não suportado" estão na SPEC-001.
+
+**Erros do processamento (assíncrono).** Não mudam o `202` do upload. Documento com falha fica `FAILED` e `failure` traz só a mensagem. Códigos: `DOCX_WITHOUT_TEXT` (422, "O arquivo {nome} não contém texto legível."), os de arquivo acima e os da IA: `AI_AUTH_FAILED` (503), `AI_MODEL_NOT_FOUND` (503), `AI_BAD_REQUEST` (502), `AI_OUTPUT_TRUNCATED` (422), `MODEL_UNAVAILABLE` (503), `MODEL_RATE_LIMITED` (503) e `INVALID_MODEL_OUTPUT` (503). Todos os de IA levam `details.retryable` no envelope de erro: `true` para `MODEL_UNAVAILABLE`, `MODEL_RATE_LIMITED` e `INVALID_MODEL_OUTPUT`; `false` para os demais. Mensagens completas na SPEC-004.
 
 ### GET `/documents`
 
@@ -294,7 +299,7 @@ Estados públicos: `UPLOADED`, `PROCESSING`, `EXTRACTING`, `VALIDATING`, `COMPLE
 }
 ```
 
-Estados: `REQUESTED`, `DETERMINISTIC_COMPLETED`, `ASSESSING`, `SCORED`, `SUMMARIZING`, `COMPLETED`, `PARTIAL`, `FAILED`. Números trafegam como números JSON; o cálculo interno usa `Decimal` e arredonda só na saída.
+Estados: `REQUESTED`, `DETERMINISTIC_COMPLETED`, `ASSESSING`, `SCORED`, `SUMMARIZING`, `COMPLETED`, `PARTIAL`, `FAILED`. `PARTIAL` ocorre quando a avaliação por conceito ou a redação do resumo falha (SPEC-009). Na avaliação, os conceitos que dependiam da IA ficam com 0 ponto, confiança baixa e evidência insuficiente. A falha fica em `failure` com `code`, `message` e `retryable`; a API expõe hoje a mensagem em `failure_reason`. Números trafegam como números JSON; o cálculo interno usa `Decimal` e arredonda só na saída.
 
 ### GET `/concepts`
 

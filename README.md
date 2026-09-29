@@ -98,7 +98,7 @@ npm run build
 
 ## Configuração
 
-Nunca use credenciais reais no repositório: o `.env` é ignorado pelo Git. Preencha `backend/.env` (chave do Gemini e credenciais do Firebase; veja a tabela em [`backend/README.md`](backend/README.md)) e, se necessário, `frontend/.env`. Sem as variáveis obrigatórias o backend não sobe e lista o que falta.
+Nunca use credenciais reais no repositório: o `.env` é ignorado pelo Git. Preencha `backend/.env` (chave do Gemini e credenciais do Firebase; veja a tabela em [`backend/README.md`](backend/README.md)) e, se necessário, `frontend/.env`. Sem as variáveis obrigatórias o backend não sobe e lista o que falta. Para rodar sem credenciais, use `AI_PROVIDER=local`, `PERSISTENCE_BACKEND=memory` e `STORAGE_BACKEND=local` (veja [`docs/development/getting-started.md`](docs/development/getting-started.md)).
 
 ## Escopo atual
 

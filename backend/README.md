@@ -1,6 +1,6 @@
 # ClauseAI backend
 
-API FastAPI do MVP: recebe apólices D&O em PDF ou imagem, extrai evidências com o **Gemini 3.5 Flash Lite** (leitura nativa de PDF ou OCR multimodal), normaliza pelo catálogo D&O, avalia cada conceito também com o Gemini e calcula pontuação, perfis de risco, resumo executivo e checklist de qualidade de forma determinística. Regras de negócio: [`docs/domain/DO_KNOWLEDGE_BASE.md`](../docs/domain/DO_KNOWLEDGE_BASE.md). Contratos: [`docs/architecture/PERSISTENCE_AND_API.md`](../docs/architecture/PERSISTENCE_AND_API.md).
+API FastAPI do MVP: recebe apólices D&O em PDF, DOCX ou imagem (JPG, PNG), extrai evidências com o **Gemini 3.5 Flash Lite** (texto nativo de PDF e DOCX, lido em faixas de páginas, ou OCR multimodal para PDF escaneado e imagem), normaliza pelo catálogo D&O, avalia cada conceito também com o Gemini e calcula pontuação, perfis de risco, resumo executivo e checklist de qualidade de forma determinística. Regras de negócio: [`docs/domain/DO_KNOWLEDGE_BASE.md`](../docs/domain/DO_KNOWLEDGE_BASE.md). Contratos: [`docs/architecture/PERSISTENCE_AND_API.md`](../docs/architecture/PERSISTENCE_AND_API.md).
 
 ## Setup
 
@@ -22,8 +22,22 @@ Copy-Item .env.example .env   # já existe um .env em branco; basta preenchê-lo
 Sem essas variáveis o servidor não sobe e informa exatamente o que falta.
 
 - Os dados ficam no **Firestore**, que funciona no plano gratuito (Spark).
-- Os PDFs e imagens originais ficam em `backend/.data/uploads` (`STORAGE_BACKEND=local`, padrão). Para usar o Firebase Storage, que exige o plano Blaze, defina `STORAGE_BACKEND=firebase` e `FIREBASE_STORAGE_BUCKET`.
-- Para rodar sem Firebase (dados só em memória), use `PERSISTENCE_BACKEND=memory`; as chaves de IA continuam obrigatórias.
+- Os arquivos originais (PDF, DOCX, imagem) ficam em `backend/.data/uploads` (`STORAGE_BACKEND=local`, padrão). Para usar o Firebase Storage, que exige o plano Blaze, defina `STORAGE_BACKEND=firebase` e `FIREBASE_STORAGE_BUCKET`.
+- Para rodar sem Firebase (dados só em memória), use `PERSISTENCE_BACKEND=memory`; a chave do Gemini continua obrigatória, salvo no modo local abaixo.
+
+### Rodar sem credenciais (modo local)
+
+Para desenvolver ou testar a interface sem Gemini nem Firebase, use estas variáveis em `backend/.env`:
+
+```
+PERSISTENCE_BACKEND=memory
+STORAGE_BACKEND=local
+AI_PROVIDER=local
+```
+
+Com `AI_PROVIDER=local`, extrator, avaliador e redator são determinísticos e não chamam modelo. O extrator só lê texto nativo (PDF com texto e DOCX) e cita a linha que contém uma variante do catálogo. PDF escaneado e imagem não geram ocorrências. Os resultados servem para testar o fluxo, não têm valor de negócio. O modo é recusado com `APP_ENV=production`. Os dados somem ao reiniciar o servidor.
+
+Limites úteis (opcionais): `EXTRACTION_PAGES_PER_CALL` (páginas de texto nativo por chamada de extração, padrão 30), `AI_MAX_ATTEMPTS`, `AI_TIMEOUT_SECONDS` e `MAX_UPLOAD_MB`. Veja `.env.example`.
 
 ## Run
 
@@ -61,7 +75,11 @@ Os testes usam dublês dos provedores de IA e persistência em memória; não ch
 |---|---|
 | `domain` | entidades, vocabulários, travas de regra de negócio (`guardrails`), consolidação por apólice e `scoring` determinístico |
 | `application` | casos de uso de apólices, comparações e conceitos; comandos e erros públicos |
-| `infrastructure` | cliente Gemini (extração, avaliação e conclusão), prompts versionados, Firestore/Storage, memória, leitura de PDF, base de conhecimento e worker em fila |
+| `infrastructure` | cliente Gemini (extração, avaliação e conclusão), IA local determinística, prompts versionados, Firestore/Storage, memória, leitura de PDF e de DOCX, base de conhecimento e worker em fila |
 | `presentation` | rotas `/api/v1`, DTOs e envelope de erro |
 
-Fluxo: `POST /policies` grava os arquivos e responde `202`; o worker extrai cada documento, aplica as travas, consolida as ocorrências e define o status (`READY`, `ATTENTION` ou `FAILED`). `POST /comparisons` responde `202`; o worker compara fatos, pede ao Gemini a avaliação por conceito, calcula scores e perfis, gera o resumo e roda o checklist de qualidade. O composition root está em `app/main.py`.
+Fluxo: `POST /policies` grava os arquivos e responde `202`; o worker extrai cada documento, aplica as travas, consolida as ocorrências e define o status (`READY`, `ATTENTION` ou `FAILED`). `POST /comparisons` responde `202`; o worker compara fatos, pede ao Gemini a avaliação por conceito, calcula scores e perfis, gera o resumo e roda o checklist de qualidade. O composition root está em `app/main.py`; o app é criado no primeiro acesso a `app.main:app`, então importar o módulo não exige configuração.
+
+## Formatos e erros
+
+Aceitos: PDF, DOCX, JPG e PNG, detectados pelo conteúdo. Em DOCX, a "página" da evidência é um bloco lógico numerado a partir de 1 (quebra de página, quebra de seção ou 3.500 caracteres). Arquivos protegidos ou corrompidos respondem `422` (`DOCX_PROTECTED`, `DOCX_CORRUPTED`, `PDF_PROTECTED`, `PDF_CORRUPTED`); XLSX, PPTX e outros zips, `415`. Falhas da IA têm código próprio e `retryable`, e a comparação vira `PARTIAL` se a avaliação por conceito ou o resumo falhar. Detalhes em `docs/specs/SDD_SPECIFICATIONS.md` (SPEC-001, SPEC-004 e SPEC-009).

@@ -14,7 +14,7 @@ Representa o arquivo recebido e seus metadados.
 
 - **Atributos:** `document_id`, `original_filename`, `content_type`, `file_kind` (`SEARCHABLE_PDF`, `SCANNED_PDF`, `IMAGE`, `DOCX`, `OTHER`), `document_type` (`DocumentType`), `insurer?`, `policy_name?`, `policy_number?`, `issue_date?`, `validity?`, `version?`, `language?`, `size_bytes`, `checksum_sha256`, `storage_key`, `uploaded_at`, `status`, `correlation_id`, `page_count?`, `extraction_quality?`, `ocr_required`, `metadata`, `failure?`.
 - Campos não identificados recebem “Não identificado” e disparam `BROKER_GUIDANCE`.
-- `DOCX`: `ocr_required` é sempre `false` e `page_count` pode ser `null`, pois o formato não tem páginas fixas. O tipo é detectado pelo conteúdo (zip com `[Content-Types].xml` e `word/document.xml`).
+- `DOCX`: `ocr_required` é sempre `false` e `page_count` é o total de blocos lógicos, pois o formato não tem páginas fixas. O tipo é detectado pelo conteúdo (zip com `[Content_Types].xml` e `word/document.xml`).
 - **Responsabilidade:** garantir identidade, integridade básica, tipo permitido e ciclo do arquivo.
 - **Relacionamentos:** possui zero ou mais `ProcessingJob`; pertence a exatamente uma `Policy`.
 - **Estados:** `UPLOADED`, `PROCESSING`, `EXTRACTING`, `VALIDATING`, `COMPLETED`, `FAILED`.
@@ -34,8 +34,8 @@ Representa a apólice estruturada, sem decidir mérito comercial ou jurídico.
 
 Trecho literal extraído; nunca é sobrescrito (correção gera nova versão).
 
-- **Atributos:** `evidence_id`, `document_id`, `page?`, `section_ref?`, `clause_ref?`, `literal_text`, `content_kind` (`TEXT`, `TABLE`, `IMAGE`), `extraction_method` (`NATIVE`, `OCR`, `MULTIMODAL`), `confidence`, `low_confidence`, `version`.
-- **Origem em DOCX:** sem páginas fixas, a origem é a seção e o bloco (`section_ref` e posição no documento); `page` só existe com quebra de página explícita. A origem é estável entre leituras do mesmo arquivo. `extraction_method` é `NATIVE`. Formato exato dos campos de bloco: pendente de confirmação.
+- **Atributos:** `evidence_id`, `document_id`, `page?`, `clause_ref?`, `literal_text`, `content_kind` (`TEXT`, `TABLE`, `IMAGE`), `extraction_method` (`NATIVE`, `OCR`, `MULTIMODAL`), `confidence`, `low_confidence`, `version`.
+- **Origem em DOCX:** sem páginas fixas, `page` guarda o número do bloco lógico (a partir de 1). O bloco muda em quebra de página explícita, quebra de seção que inicia página ou a cada 3.500 caracteres, sempre entre parágrafos. A numeração é estável entre leituras do mesmo arquivo. `extraction_method` é `NATIVE`. A interface diz "bloco" para DOCX.
 - **Responsabilidade:** base de rastreabilidade de todos os demais registros.
 
 ### `PolicySection`

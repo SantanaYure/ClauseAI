@@ -45,19 +45,34 @@ Receber um PDF, uma imagem (JPG, PNG) ou um DOCX e criar um `Document` em estado
 
 ### Regras e erros
 
-Aceitar somente `application/pdf`, imagens explicitamente configuradas (JPG, PNG) e DOCX (`application/vnd.openxmlformats-officedocument.wordprocessingml.document`); rejeitar vazio, excesso de tamanho e metadata inválida.
+Aceitar somente `application/pdf`, imagens explicitamente configuradas (JPG, PNG) e DOCX (`application/vnd.openxmlformats-officedocument.wordprocessingml.document`); rejeitar vazio, excesso de tamanho, arquivo protegido ou corrompido e metadata inválida.
 
-O tipo é detectado pelo conteúdo, nunca só pela extensão ou pelo MIME informado. Um DOCX é um zip que contém `[Content-Types].xml` e `word/document.xml`. Um zip sem esses dois itens não é DOCX. DOCX protegido por senha não é um zip (vira um contêiner cifrado), e é reconhecido por isso.
+O tipo é detectado pelo conteúdo, nunca só pela extensão ou pelo MIME informado. Um DOCX é um zip que contém `[Content_Types].xml` (com o tipo principal de documento Word) e `word/document.xml`. Zip sem esses itens não é DOCX. XLSX, PPTX, `.docm`, `.dotx` e outros zips são rejeitados como tipo não suportado.
 
-Erros: `INVALID_FILE`, `UNSUPPORTED_MEDIA_TYPE`, `FILE_TOO_LARGE`, `STORAGE_UNAVAILABLE`. Os códigos não mudam. O detalhe vai na mensagem, em português:
+Ordem das validações, por arquivo: vazio, tamanho, tipo pelo conteúdo, integridade e proteção.
 
-| Situação | Código | Mensagem (exemplo) |
-|---|---|---|
-| Documento corrompido | `INVALID_FILE` | "O arquivo está corrompido e não pode ser lido." |
-| Documento protegido por senha | `INVALID_FILE` | "O arquivo está protegido por senha. Envie uma cópia sem senha." |
-| Tipo não suportado | `UNSUPPORTED_MEDIA_TYPE` | "Tipo de arquivo não suportado. Envie PDF, JPG, PNG ou DOCX." |
+Erros de upload (o envelope de erro está em `PERSISTENCE_AND_API.md`):
 
-Pendente de confirmação (backend-specialist): código HTTP e texto exatos de cada linha, principalmente o de arquivo protegido por senha.
+| Situação | HTTP | Código | Mensagem |
+|---|---|---|---|
+| Arquivo ausente ou vazio | 400 | `INVALID_FILE` | "Arquivo vazio: {nome}." |
+| Arquivo acima de `MAX_UPLOAD_MB` | 413 | `FILE_TOO_LARGE` | "Arquivo acima do limite: {nome}." |
+| DOCX que descompacta acima de 20 × o limite (zip bomb) | 413 | `FILE_TOO_LARGE` | "O conteúdo do arquivo {nome} excede o limite permitido." |
+| DOCX protegido por senha ou `.doc` legado | 422 | `DOCX_PROTECTED` | "O arquivo {nome} está protegido por senha ou está em formato antigo (.doc). Remova a proteção e envie novamente como .docx." |
+| DOCX corrompido | 422 | `DOCX_CORRUPTED` | "O arquivo {nome} está corrompido e não pôde ser aberto. Gere o DOCX novamente." |
+| PDF protegido por senha | 422 | `PDF_PROTECTED` | "O arquivo {nome} está protegido por senha. Remova a proteção e envie novamente." |
+| PDF corrompido | 422 | `PDF_CORRUPTED` | "O arquivo {nome} está corrompido e não pôde ser aberto. Gere o PDF novamente." |
+| Tipo não suportado (inclui XLSX, PPTX, `.docm`, `.dotx`, outros zips e arquivo renomeado) | 415 | `UNSUPPORTED_MEDIA_TYPE` | "Formato não aceito: {nome}. Use PDF, DOCX, JPG ou PNG." |
+| Falha no armazenamento | 503 | `STORAGE_UNAVAILABLE` | mensagem genérica |
+
+Como o backend decide entre "protegido", "corrompido" e "não suportado" quando o conteúdo não é DOCX:
+
+- Contêiner OLE (senha ou `.doc` legado): `DOCX_PROTECTED` se o nome termina em `.docx` ou `.doc`; senão, `UNSUPPORTED_MEDIA_TYPE`.
+- Zip com entrada cifrada: `DOCX_PROTECTED`.
+- Zip ilegível: `DOCX_CORRUPTED` se o nome termina em `.docx` ou `.doc`; senão, `UNSUPPORTED_MEDIA_TYPE`.
+- Zip com `[Content_Types].xml` mas sem `word/document.xml`: `DOCX_CORRUPTED` se o nome termina em `.docx` ou `.doc`; senão, `UNSUPPORTED_MEDIA_TYPE`.
+
+DOCX e PDF são lidos já no upload. Um DOCX que não abre gera `DOCX_CORRUPTED`. Falhas descobertas depois, no processamento, não mudam a resposta `202`: o documento fica `FAILED` com a mensagem do erro (SPEC-004).
 
 ### Critérios de aceite
 
@@ -68,7 +83,10 @@ Pendente de confirmação (backend-specialist): código HTTP e texto exatos de c
 - Requisição repetida não duplica quando a mesma chave de idempotência for fornecida.
 - DOCX válido é aceito e criado como `Document`, com o tipo detectado pelo conteúdo.
 - Arquivo renomeado (por exemplo, `.txt` chamado `apolice.docx`) é rejeitado com `UNSUPPORTED_MEDIA_TYPE`.
-- DOCX corrompido ou protegido por senha é rejeitado com `INVALID_FILE` e mensagem específica.
+- DOCX corrompido é rejeitado com `422 DOCX_CORRUPTED`. DOCX protegido por senha ou `.doc` legado, com `422 DOCX_PROTECTED`.
+- PDF protegido por senha é rejeitado com `422 PDF_PROTECTED`. PDF corrompido, com `422 PDF_CORRUPTED`.
+- XLSX, PPTX, `.docm`, `.dotx` e outros zips são rejeitados com `415 UNSUPPORTED_MEDIA_TYPE`.
+- Zip que descompacta acima de 20 × `MAX_UPLOAD_MB` é rejeitado com `413 FILE_TOO_LARGE`.
 
 ### Fora de escopo
 
@@ -80,7 +98,7 @@ Tamanho máximo, formatos de imagem além de JPG e PNG e política de retenção
 
 ### Testes futuros
 
-Unitários de validação (incluindo DOCX válido, corrompido, com senha e renomeado); contrato multipart; integração com Storage fake; teste de publicação pós-persistência; teste de idempotência.
+Unitários de validação (incluindo DOCX válido, corrompido, com senha, `.doc` legado, zip bomb, XLSX/PPTX e renomeado; PDF com senha e corrompido); contrato multipart; integração com Storage fake; teste de publicação pós-persistência; teste de idempotência.
 
 ## SPEC-002 — Armazenamento
 
@@ -162,7 +180,7 @@ Máquina de estados; duplicação de evento; crash simulado; limites de retry.
 
 ### Objetivo e contexto
 
-Extrair evidências de PDF, imagem ou DOCX. PDF usa leitura nativa e, quando necessário, OCR multimodal com Gemini. Imagem usa OCR multimodal. DOCX usa somente leitura local do texto, nunca OCR. A IA é chamada por meio do `AIOrchestrator` (documento 3, prompts 2 e 3).
+Extrair evidências de PDF, imagem ou DOCX. PDF com texto usa leitura nativa; PDF escaneado usa OCR multimodal com Gemini. Imagem usa OCR multimodal. DOCX usa somente leitura local do texto, nunca OCR. A IA é chamada por meio do `AIOrchestrator` (documento 3, prompts 2 e 3).
 
 ### Comportamento, entradas e saídas
 
@@ -176,24 +194,61 @@ Entrada: `document_id`, bytes/contexto, schema e `prompt_version`. Saída: `Extr
 
 Não inventar; preservar ausência, ambiguidade, conflitos, tabelas, numeração de cláusulas, valores, datas, limites, exclusões e condições precedentes. Usar leitura nativa quando houver camada de texto e OCR multimodal para PDF digitalizado ou imagem. OCR ilegível ou inconsistente gera evidência de baixa confiança, nunca texto completado. Resposta inválida não vira apólice. Timeout/429/5xx têm retry limitado.
 
-**DOCX.** O texto é lido localmente, sem OCR e sem enviar o arquivo ao modelo como imagem. Entram, na ordem em que aparecem no documento: parágrafos, títulos, listas, tabelas, cabeçalhos e rodapés. O texto lido segue para a mesma extração e normalização do PDF. `extraction_method` da evidência é `NATIVE`, com confiança de leitura alta; a incerteza do modelo continua registrada.
+**Faixas de páginas.** Texto nativo (PDF com texto e DOCX) é enviado ao modelo em faixas de `EXTRACTION_PAGES_PER_CALL` páginas (padrão 30, entre 1 e 200), para a resposta não estourar o limite de saída. O backend mescla os resultados: o primeiro valor preenchido de cada campo de identificação vence e as ocorrências são concatenadas. Ocorrências do mesmo conceito vindas de faixas diferentes são unidas depois, na consolidação da apólice. PDF escaneado e imagem vão em uma única chamada, com o arquivo inteiro.
 
-**Origem estável da evidência em DOCX.** DOCX não tem páginas fixas: a paginação depende do programa que abre o arquivo. Por isso a evidência guarda a origem por seção/bloco (título da seção e posição do bloco no documento) e só usa página quando houver quebra de página explícita no arquivo. A origem é a mesma toda vez que o mesmo arquivo é lido. Formato exato do campo: pendente de confirmação (backend-specialist).
+**DOCX.** O texto é lido localmente, sem OCR e sem enviar o arquivo ao modelo como imagem. Entram, na ordem em que aparecem no documento: parágrafos, títulos (`#`), listas (`-`), tabelas (uma linha por linha da tabela, com `[Coluna N]`), cabeçalhos e rodapés. O texto lido segue para a mesma extração e normalização do PDF. `extraction_method` da evidência é `NATIVE`, com confiança de leitura alta; a incerteza do modelo continua registrada.
 
-Erros: `INVALID_MODEL_OUTPUT`, `EXTRACTION_TIMEOUT`, `MODEL_UNAVAILABLE`, `SCHEMA_VALIDATION_FAILED`, `LOW_OCR_CONFIDENCE` (aviso, não falha). Documento corrompido ou protegido por senha que só seja percebido na leitura falha com `INVALID_FILE` e mensagem específica (SPEC-001).
+**Origem da evidência em DOCX.** DOCX não tem páginas fixas: a paginação depende do programa que abre o arquivo. O backend divide o texto em blocos lógicos numerados a partir de 1. Um bloco novo começa em:
+
+- quebra de página explícita (inclusive "quebra de página antes" do parágrafo);
+- quebra de seção que inicia nova página (seção contínua não quebra);
+- 3.500 caracteres acumulados no bloco.
+
+A divisão ocorre sempre entre parágrafos ou tabelas, então uma citação nunca fica cortada entre dois blocos. Quebras seguidas não criam bloco vazio. O resultado é determinístico: o mesmo arquivo gera sempre a mesma numeração. O número do bloco é gravado no campo `page` da evidência, e `pages` do documento é o total de blocos. Não existe campo `section_ref` no modelo atual. A interface deve chamar essa origem de "bloco" quando o documento for DOCX, e de "página" nos demais formatos.
+
+**Limitações conhecidas do DOCX.** Não são extraídos:
+
+- numeração automática de listas e de cláusulas do Word (definida em `numbering.xml`): só o texto do parágrafo é lido, sem o "1.2.3" gerado pelo Word. A evidência pode ficar sem número de cláusula ou com o número digitado no texto;
+- notas de rodapé;
+- caixas de texto.
+
+Quando a cláusula relevante depender desses elementos, a leitura pode omitir ou perder a referência, e o corretor deve conferir o original.
+
+**Erros.** Código, HTTP e mensagem seguem a tabela abaixo. Erros do provedor de IA e do processamento não mudam a resposta `202` do upload: o documento fica `FAILED` e a mensagem aparece em `failure`.
+
+| Código | HTTP | Quando | `retryable` |
+|---|---|---|---|
+| `DOCX_CORRUPTED` | 422 | DOCX não pôde ser lido | não |
+| `DOCX_WITHOUT_TEXT` | 422 | DOCX sem texto legível: "O arquivo {nome} não contém texto legível." | não |
+| `PDF_PROTECTED`, `PDF_CORRUPTED` | 422 | PDF descoberto protegido ou corrompido na leitura (SPEC-001) | não |
+| `AI_AUTH_FAILED` | 503 | chave da IA inválida ou sem permissão (HTTP 401 ou 403 do provedor, ou mensagem de chave inválida): "A chave de acesso da IA é inválida ou não tem permissão. Verifique a configuração do backend." | não |
+| `AI_MODEL_NOT_FOUND` | 503 | modelo configurado não existe (404 do provedor): "O modelo de IA configurado não foi encontrado. Verifique a configuração do backend." | não |
+| `AI_BAD_REQUEST` | 502 | provedor recusou a requisição (outros 4xx): "A IA recusou a requisição (dados em formato não aceito). Tente outro arquivo." | não |
+| `AI_OUTPUT_TRUNCATED` | 422 | resposta cortada por tamanho máximo: "A resposta da IA foi cortada por exceder o tamanho máximo. O documento é grande demais para uma única leitura; divida-o em partes menores." | não |
+| `MODEL_UNAVAILABLE` | 503 | timeout ou 5xx após `AI_MAX_ATTEMPTS` tentativas | sim |
+| `MODEL_RATE_LIMITED` | 503 | limite de uso (429) persistiu após as esperas | sim |
+| `INVALID_MODEL_OUTPUT` | 503 | resposta fora do JSON ou do schema após `AI_MAX_ATTEMPTS` tentativas | sim |
+
+O texto bruto de erro 4xx do provedor nunca é exposto: a mensagem é sempre a da tabela. Os códigos de IA levam `details.retryable` no envelope de erro. O documento guarda só a mensagem em `failure`. `EXTRACTION_TIMEOUT`, `SCHEMA_VALIDATION_FAILED` e `LOW_OCR_CONFIDENCE` (aviso, não falha) seguem como vocabulário reservado, sem uso no backend atual.
+
+**Cancelamento.** O processamento de cada apólice roda em uma task própria. Cancelar a apólice (`POST /policies/{id}/cancel`) interrompe essa task e não derruba o worker da fila, que segue atendendo os demais eventos. Só o encerramento do servidor cancela o worker.
 
 ### Critérios de aceite
 
 - Modelo é chamado apenas pela orquestração.
 - Resultado registra modelo, prompt, tokens, latência e tentativa.
-- Cada campo preenchido tem evidência (origem, seção/cláusula quando houver, método e confiança) ou é rejeitado. A origem é a página (PDF, imagem) ou a seção/bloco (DOCX).
+- Cada campo preenchido tem evidência (origem, cláusula quando houver, método e confiança) ou é rejeitado. A origem é a página (PDF, imagem) ou o bloco lógico (DOCX), sempre no campo `page`.
 - PDF pesquisável, PDF digitalizado, imagem e DOCX são processados; todas as páginas (ou, no DOCX, todos os blocos) são contabilizadas.
+- Texto nativo com mais de `EXTRACTION_PAGES_PER_CALL` páginas é lido em várias chamadas e mesclado; PDF escaneado e imagem usam uma chamada.
+- Cancelar uma apólice em processamento não interrompe o worker da fila.
 - DOCX nunca aciona OCR. O texto de parágrafos, títulos, listas, tabelas, cabeçalhos e rodapés aparece nas evidências, na ordem do documento.
-- Duas leituras do mesmo DOCX geram as mesmas origens de evidência.
+- Duas leituras do mesmo DOCX geram os mesmos blocos e as mesmas origens de evidência.
+- Bloco novo começa em quebra de página explícita, quebra de seção que inicia página ou a cada 3.500 caracteres, sempre entre parágrafos.
 - Comparações PDF × PDF, DOCX × DOCX e PDF × DOCX funcionam com o mesmo resultado esperado para o mesmo conteúdo.
 - Evidência de baixa confiança aparece com `BROKER_GUIDANCE`.
 - Injection no PDF não altera instruções do sistema.
-- Ao exceder retries, status é `FAILED` com `retryable` correto.
+- Ao exceder retries, o documento fica `FAILED` e o erro leva `retryable` correto (`MODEL_UNAVAILABLE`, `MODEL_RATE_LIMITED` e `INVALID_MODEL_OUTPUT` são retryable; `AI_*` de configuração, não).
+- Resposta truncada gera `AI_OUTPUT_TRUNCATED`, sem retry.
 
 ### Fora de escopo
 
@@ -201,11 +256,11 @@ Vínculo a conceitos (SPEC-015), pontuação (SPEC-016) e aconselhamento jurídi
 
 ### Questões abertas
 
-Limite de páginas/tokens (e de blocos no DOCX) e política de retenção do raw response. Formato exato da origem da evidência em DOCX: pendente de confirmação.
+Limite de páginas/tokens (e de blocos no DOCX) e política de retenção do raw response. O limite de 3.500 caracteres por bloco é parâmetro técnico fixo do backend, sem validação de negócio.
 
 ### Testes futuros
 
-Mocks, golden datasets (incluindo o mesmo conteúdo em PDF e em DOCX), DOCX com tabela, cabeçalho, rodapé e quebra de página, respostas truncadas, conflitos, documentos extensos e injection.
+Mocks, golden datasets (incluindo o mesmo conteúdo em PDF e em DOCX), DOCX com tabela, cabeçalho, rodapé, quebra de página e de seção, bloco longo dividido, respostas truncadas, faixas de páginas, conflitos, documentos extensos e injection.
 
 ## SPEC-005 — Persistência da apólice
 
@@ -378,13 +433,22 @@ Entrada: resultado determinístico, ocorrências, evidências selecionadas e cri
 
 Usar apenas contexto fornecido; valores só das escalas fechadas; justificativa para valor ≠ 1,00; sem dupla redução pelo mesmo motivo; exclusão expressa zera o conceito; contratação só com documento contratual aplicável; citar `evidence_id`. Erros têm retry limitado.
 
+**Falha parcial.** A comparação termina em `PARTIAL` (e não em `FAILED`) em dois casos:
+
+- a avaliação por conceito falha (erro da IA depois dos retries): os conceitos que dependiam da IA ficam com 0 ponto, confiança baixa, evidência insuficiente e a justificativa "Avaliação por IA indisponível; pontuação não atribuída." Nada é inventado. Os fatos determinísticos, os scores e o resumo determinístico continuam. `failure.message` começa com "Avaliação por IA indisponível: ";
+- a redação da conclusão falha: vale o resumo determinístico e `failure.message` começa com "Resumo redigido sem IA: ". Se os dois falharem, prevalece a falha da avaliação.
+
+`failure` da comparação guarda `code`, `message` e `retryable`. `retryable` é verdadeiro para `MODEL_UNAVAILABLE`, `MODEL_RATE_LIMITED` e `INVALID_MODEL_OUTPUT`, e falso para `AI_AUTH_FAILED`, `AI_BAD_REQUEST`, `AI_MODEL_NOT_FOUND` e `AI_OUTPUT_TRUNCATED` (SPEC-004). Erro fora dessa lista durante a comparação vira `FAILED` com `UNEXPECTED_ERROR`.
+
 ### Critérios de aceite
 
 - IA não cria item factual fora da comparação nem calcula pontos.
 - Resultado com valor fora da escala ou sem justificativa é rejeitado.
 - Modelo/prompt/latência são registrados.
 - Conceito sem evidência suficiente fica `sufficient_evidence=false` e recebe `BROKER_GUIDANCE`.
-- Falha de avaliação preserva resultado determinístico e status `PARTIAL` explícito.
+- Falha da avaliação por conceito preserva o resultado determinístico e marca `PARTIAL`, com os conceitos que dependiam da IA em 0 ponto, confiança baixa e evidência insuficiente.
+- Falha só na redação do resumo também marca `PARTIAL`.
+- `failure.retryable` reflete o erro da IA.
 
 ### Fora de escopo
 
@@ -475,6 +539,8 @@ A frase "Consulte seu corretor de seguros." fica sempre visível, em qualquer es
 ### Comportamento, entradas e saídas
 
 Entrada: response de comparison. UI exibe a ordem fixa acima. Em "Ver cálculo": documentos processados, qualidade da extração, filtro por nível de importância, seletor de perfil de risco, tabela com uma linha por conceito (colunas do prompt 15, incluindo peso, Resultado-base, Fator de Ajuste, pontos e parecer), Score de Aderência, Índice de Completude, indicador comparativo, resumo executivo, evidência literal com fonte/cláusula e página (ou seção/bloco, em DOCX) e alertas.
+
+Em evidências de documento DOCX, a interface escreve "bloco" em vez de "página" (por exemplo, "bloco 3"). Nos demais formatos, continua "página". O rótulo vem do formato do documento (`file_kind`).
 
 ### Dependências
 
@@ -825,7 +891,7 @@ Repositories, `ScoringService`.
 
 ### Regras e erros
 
-Verificar: arquivos lidos, OCR e confiança (não se aplica a DOCX, que nunca usa OCR), páginas processadas (no DOCX, seções/blocos lidos), classificação de documentos, página e cláusula nas evidências, todos os conceitos ponderados pesquisados, mesmos critérios nas duas apólices, contratação separada de presença, ausência separada de exclusão, pesos preservados, cálculos corretos, limites e prazos em bases equivalentes, completude calculada, críticos inconclusivos destacados, recomendação compatível com evidências e orientação ao usuário. Verificação negativa gera correção ou limitação explícita com `BROKER_GUIDANCE`.
+Verificar: arquivos lidos, OCR e confiança (não se aplica a DOCX, que nunca usa OCR), páginas processadas (no DOCX, blocos lidos), classificação de documentos, página e cláusula nas evidências, todos os conceitos ponderados pesquisados, mesmos critérios nas duas apólices, contratação separada de presença, ausência separada de exclusão, pesos preservados, cálculos corretos, limites e prazos em bases equivalentes, completude calculada, críticos inconclusivos destacados, recomendação compatível com evidências e orientação ao usuário. Verificação negativa gera correção ou limitação explícita com `BROKER_GUIDANCE`.
 
 ### Critérios de aceite
 

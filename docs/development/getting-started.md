@@ -55,7 +55,19 @@ npm run build
 
 ## Formatos de documento
 
-O sistema aceita PDF, JPG, PNG e DOCX. Para testar, use os exemplos de `Policy/` (PDF) ou envie um DOCX pela tela Apólices. DOCX é lido localmente, sem OCR. Detalhes na SPEC-001 e na SPEC-004.
+O sistema aceita PDF, JPG, PNG e DOCX. Para testar, use os exemplos de `Policy/` (PDF) ou envie um DOCX pela tela Apólices. DOCX é lido localmente, sem OCR, e a origem da evidência é um "bloco" numerado, não uma página. Arquivos protegidos ou corrompidos são recusados no envio. Detalhes na SPEC-001 e na SPEC-004.
+
+## Rodar tudo localmente, sem credenciais
+
+Sem chave do Gemini e sem Firebase, edite `backend/.env` (copiado de `.env.example`) com:
+
+```
+PERSISTENCE_BACKEND=memory
+STORAGE_BACKEND=local
+AI_PROVIDER=local
+```
+
+Depois suba o backend e o frontend como acima. A IA local é determinística: só lê texto nativo (PDF com texto e DOCX) e cita trechos que contêm termos do catálogo. PDF escaneado e imagem não geram ocorrências. Os dados ficam em memória e somem ao reiniciar. O modo é recusado com `APP_ENV=production`. Detalhes no [`backend/README.md`](../../backend/README.md) e no ADR-026.
 
 ## Como a equipe trabalha
 
@@ -63,4 +75,4 @@ O fluxo com subagentes está em [`conventions.md`](conventions.md#equipe-de-suba
 
 ## Ambiente
 
-Copie os dois `.env.example` para `.env` apenas localmente. Nesta etapa, as variáveis de Firebase e IA são reservas documentadas e não são consumidas por adapters reais.
+Copie os dois `.env.example` para `.env` apenas localmente. Para usar o Gemini e o Firebase de verdade, preencha as variáveis descritas no [`backend/README.md`](../../backend/README.md). O backend não sobe se faltar alguma delas, e informa quais.

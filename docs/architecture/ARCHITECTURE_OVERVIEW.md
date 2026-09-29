@@ -11,7 +11,7 @@ O ClauseAI recebe documentos de apólice D&O, armazena o original, extrai evidê
 | RF-01 | Aceitar PDF, imagens (JPG, PNG) e DOCX, com o tipo detectado pelo conteúdo, e registrar tipo de documento, seguradora, versão e vigência. |
 | RF-02 | Armazenar original, metadados, status e histórico de processamento. |
 | RF-03 | Processar fora do ciclo da requisição de upload. |
-| RF-04 | Extrair conteúdo por leitura nativa (PDF, DOCX) ou OCR (imagem, PDF digitalizado), com evidências literais (página ou seção/bloco, cláusula, confiança). DOCX nunca usa OCR. |
+| RF-04 | Extrair conteúdo por leitura nativa (PDF, DOCX) ou OCR (imagem, PDF digitalizado), com evidências literais (página ou, no DOCX, bloco lógico; cláusula; confiança). DOCX nunca usa OCR. |
 | RF-05 | Normalizar evidências contra o catálogo D&O, classificando tipo de ocorrência, relação terminológica e status. |
 | RF-06 | Consultar documentos, apólices e evidências por conceito, variante, seguradora, cláusula, página, peso e status. |
 | RF-07 | Comparar exatamente duas apólices com os mesmos conceitos, critérios e pesos. |
