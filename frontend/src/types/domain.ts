@@ -23,9 +23,15 @@ export type DocumentType =
 export type FileKind = 'SEARCHABLE_PDF' | 'SCANNED_PDF' | 'IMAGE';
 
 export type DocumentStatus =
-  'UPLOADED' | 'PROCESSING' | 'EXTRACTING' | 'VALIDATING' | 'COMPLETED' | 'FAILED';
+  | 'UPLOADED'
+  | 'PROCESSING'
+  | 'EXTRACTING'
+  | 'VALIDATING'
+  | 'COMPLETED'
+  | 'FAILED'
+  | 'CANCELLED';
 
-export type PolicyStatus = 'READY' | 'ATTENTION' | 'PROCESSING' | 'FAILED';
+export type PolicyStatus = 'READY' | 'ATTENTION' | 'PROCESSING' | 'FAILED' | 'CANCELLED';
 
 export type ExtractionMethod = 'NATIVE' | 'OCR' | 'MULTIMODAL';
 

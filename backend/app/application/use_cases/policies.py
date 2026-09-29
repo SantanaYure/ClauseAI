@@ -1,6 +1,7 @@
 """Policy use cases: upload, asynchronous processing and reading
 (SPEC-001 to SPEC-006, SPEC-015)."""
 
+import asyncio
 from dataclasses import dataclass
 from uuid import uuid4
 
@@ -85,6 +86,7 @@ class PolicyService:
         self._pdf_reader = pdf_reader
         self._event_bus = event_bus
         self._limits = limits
+        self._running_tasks: dict[str, asyncio.Task[None]] = {}
 
     # ---------- Commands ----------
 
@@ -163,38 +165,89 @@ class PolicyService:
         policy = await self._repository.get(policy_id)
         if policy is None or policy.status != PolicyStatus.PROCESSING:
             return  # idempotent: already processed
-        knowledge_base = self._catalog.load()
-        occurrences: list[ConceptOccurrence] = []
-        intakes: list[tuple[PolicyDocument, DocumentIntake]] = []
 
-        with log_context(policy_id=policy_id, correlation_id=policy.correlation_id):
-            for document in policy.documents:
-                try:
-                    found, intake = await self._process_document(policy, document, knowledge_base)
-                    occurrences.extend(found)
-                    intakes.append((document, intake))
-                except ApplicationError as exc:
-                    self._fail(document, exc.message)
-                except Exception:
-                    logger.exception("Document processing failed")
-                    self._fail(document, "Falha inesperada ao processar o documento.")
+        current_task = asyncio.current_task()
+        if current_task is not None:
+            self._running_tasks[policy_id] = current_task
+
+        try:
+            knowledge_base = self._catalog.load()
+            occurrences: list[ConceptOccurrence] = []
+            intakes: list[tuple[PolicyDocument, DocumentIntake]] = []
+
+            with log_context(policy_id=policy_id, correlation_id=policy.correlation_id):
+                for document in policy.documents:
+                    fresh = await self._repository.get(policy_id)
+                    if fresh is None or fresh.status == PolicyStatus.CANCELLED:
+                        logger.info("Policy processing aborted: policy cancelled")
+                        return
+
+                    try:
+                        found, intake = await self._process_document(policy, document, knowledge_base)
+                        occurrences.extend(found)
+                        intakes.append((document, intake))
+                    except ApplicationError as exc:
+                        self._fail(document, exc.message)
+                    except Exception:
+                        logger.exception("Document processing failed")
+                        self._fail(document, "Falha inesperada ao processar o documento.")
+                    await self._save(policy)
+
+                fresh = await self._repository.get(policy_id)
+                if fresh is None or fresh.status == PolicyStatus.CANCELLED:
+                    logger.info("Policy processing aborted before final save: policy cancelled")
+                    return
+
+                self._apply_intake(policy, intakes)
+                policy.occurrences = merge_occurrences(occurrences)
+                policy.knowledge_base_version = knowledge_base.version
+                status, alerts = derive_policy_status(
+                    policy, policy.documents, self._limits.min_evidence_confidence
+                )
+                policy.alerts = alerts + [
+                    f"{document.filename} parece ser do tipo {intake.document_type} "
+                    f"(informado: {document.type})."
+                    for document, intake in intakes
+                    if intake.document_type and intake.document_type not in ("OTHER", document.type)
+                ]
+                policy.status = status
                 await self._save(policy)
+                logger.info("Policy processed")
+        except asyncio.CancelledError:
+            logger.info("Policy processing cancelled via task cancellation")
+            raise
+        finally:
+            self._running_tasks.pop(policy_id, None)
 
-            self._apply_intake(policy, intakes)
-            policy.occurrences = merge_occurrences(occurrences)
-            policy.knowledge_base_version = knowledge_base.version
-            status, alerts = derive_policy_status(
-                policy, policy.documents, self._limits.min_evidence_confidence
+    async def cancel_policy(self, policy_id: str) -> Policy:
+        policy = await self.get_policy(policy_id)
+        if policy.status != PolicyStatus.PROCESSING:
+            raise invalid(
+                "POLICY_NOT_PROCESSING",
+                "Apenas apólices em processamento podem ser canceladas.",
             )
-            policy.alerts = alerts + [
-                f"{document.filename} parece ser do tipo {intake.document_type} "
-                f"(informado: {document.type})."
-                for document, intake in intakes
-                if intake.document_type and intake.document_type not in ("OTHER", document.type)
-            ]
-            policy.status = status
-            await self._save(policy)
-            logger.info("Policy processed")
+
+        task = self._running_tasks.get(policy_id)
+        if task is not None and not task.done():
+            task.cancel()
+
+        policy.status = PolicyStatus.CANCELLED
+        for document in policy.documents:
+            if document.status in (
+                DocumentStatus.UPLOADED,
+                DocumentStatus.PROCESSING,
+                DocumentStatus.EXTRACTING,
+                DocumentStatus.VALIDATING,
+            ):
+                document.status = DocumentStatus.CANCELLED
+                document.failure = "Extração cancelada pelo usuário."
+        cancel_alert = "Extração cancelada pelo usuário."
+        if cancel_alert not in policy.alerts:
+            policy.alerts.append(cancel_alert)
+        await self._save(policy)
+        with log_context(policy_id=policy_id, correlation_id=policy.correlation_id):
+            logger.info("Policy extraction cancelled")
+        return policy
 
     async def _process_document(
         self, policy: Policy, document: PolicyDocument, knowledge_base: KnowledgeBase

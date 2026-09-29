@@ -11,6 +11,7 @@ import {
 import { describeProcessing, isDocumentBusy, isPolicyBusy } from '../../shared/processing';
 import { documentStatusTone, policyStatusTone } from '../../shared/tones';
 import type { PolicySummary } from '../../types/domain';
+import { CancelExtractionButton } from './CancelExtractionButton';
 import { DeletePolicyButton } from './DeletePolicyButton';
 
 type PolicyCardProps = {
@@ -73,6 +74,9 @@ export function PolicyCard({ policy, onDeleted }: PolicyCardProps) {
       )}
 
       <div className="policy-card__actions">
+        {isPolicyBusy(policy.status) && (
+          <CancelExtractionButton policyId={policy.id} policyName={policy.name} variant="compact" />
+        )}
         <DeletePolicyButton policy={policy} onDeleted={() => onDeleted(policy)} />
         <a className="btn btn--ghost" href={paths.policy(policy.id)}>
           Ver evidências

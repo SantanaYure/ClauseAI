@@ -73,6 +73,7 @@ class DocumentStatus(StrEnum):
     VALIDATING = "VALIDATING"
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
+    CANCELLED = "CANCELLED"
 
 
 class PolicyStatus(StrEnum):
@@ -80,6 +81,7 @@ class PolicyStatus(StrEnum):
     READY = "READY"
     ATTENTION = "ATTENTION"
     FAILED = "FAILED"
+    CANCELLED = "CANCELLED"
 
 
 COMPARABLE_POLICY_STATUSES = frozenset({PolicyStatus.READY, PolicyStatus.ATTENTION})

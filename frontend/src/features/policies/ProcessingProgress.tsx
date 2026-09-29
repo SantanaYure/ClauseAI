@@ -10,6 +10,7 @@ import { describeProcessing, isDocumentBusy } from '../../shared/processing';
 import { documentStatusTone } from '../../shared/tones';
 import { useApiData } from '../../shared/useApiData';
 import type { DocumentStatus } from '../../types/domain';
+import { CancelExtractionButton } from './CancelExtractionButton';
 
 const STEPS: DocumentStatus[] = ['UPLOADED', 'PROCESSING', 'EXTRACTING', 'VALIDATING', 'COMPLETED'];
 
@@ -28,17 +29,28 @@ export function ProcessingProgress({ policyId }: { policyId: string }) {
 
   const policy = state.data;
   const done = policy.status !== 'PROCESSING';
+  const cancelled = policy.status === 'CANCELLED';
 
   return (
     <div className="stack">
       <p className="processing-note processing-note--block" role="status" aria-live="polite">
         {done ? (
-          <>
-            <Icon name="checkCircle" size={20} />
-            <span>
-              <strong>Processamento concluído.</strong>
-            </span>
-          </>
+          cancelled ? (
+            <>
+              <Icon name="alert" size={20} />
+              <span>
+                <strong>Processamento cancelado.</strong>
+                A extração foi interrompida pelo usuário.
+              </span>
+            </>
+          ) : (
+            <>
+              <Icon name="checkCircle" size={20} />
+              <span>
+                <strong>Processamento concluído.</strong>
+              </span>
+            </>
+          )
         ) : (
           <>
             <Spinner />
@@ -49,6 +61,16 @@ export function ProcessingProgress({ policyId }: { policyId: string }) {
           </>
         )}
       </p>
+
+      {!done && (
+        <CancelExtractionButton
+          policyId={policy.id}
+          policyName={policy.name}
+          variant="block"
+          onCancelled={state.reload}
+        />
+      )}
+
       <ul className="stack">
         {policy.documents.map((document) => {
           const current = STEPS.indexOf(document.status);
@@ -89,7 +111,7 @@ export function ProcessingProgress({ policyId }: { policyId: string }) {
             <BrokerNotice key={alert} reason={alert} />
           ))}
           <a className="btn btn--primary btn--block" href={paths.policy(policy.id)}>
-            Ver apólice
+            Ver detalhes da apólice
           </a>
           <a className="btn btn--secondary btn--block" href={paths.policies}>
             Voltar para Apólices

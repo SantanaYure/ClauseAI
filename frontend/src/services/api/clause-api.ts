@@ -131,6 +131,15 @@ export const clauseApi = {
     return request(`/policies/${encodeURIComponent(policyId)}`);
   },
 
+  /** Cancela o processamento/extração de uma apólice. */
+  async cancelPolicy(policyId: string): Promise<PolicyDetail> {
+    const policy = await request<PolicyDetail>(`/policies/${encodeURIComponent(policyId)}/cancel`, {
+      method: 'POST',
+    });
+    notifyChange();
+    return policy;
+  },
+
   /** Exclui a apólice, suas evidências e os arquivos originais. */
   async deletePolicy(policyId: string): Promise<void> {
     await request<void>(`/policies/${encodeURIComponent(policyId)}`, { method: 'DELETE' });

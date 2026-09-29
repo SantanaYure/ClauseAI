@@ -74,6 +74,13 @@ async def list_policies(
     return Page(items=[PolicySummaryResponse.of(p) for p in policies])
 
 
+@router.post("/{policy_id}/cancel", response_model=PolicyDetailResponse)
+async def cancel_policy(policy_id: str, services: Services) -> PolicyDetailResponse:
+    """Cancel asynchronous extraction of a policy (SPEC-003)."""
+
+    return PolicyDetailResponse.of(await services.policies.cancel_policy(policy_id))
+
+
 @router.delete("/{policy_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_policy(policy_id: str, services: Services) -> None:
     """Delete a policy, its evidence and its original files (SPEC-006)."""
@@ -84,3 +91,4 @@ async def delete_policy(policy_id: str, services: Services) -> None:
 @router.get("/{policy_id}", response_model=PolicyDetailResponse)
 async def get_policy(policy_id: str, services: Services) -> PolicyDetailResponse:
     return PolicyDetailResponse.of(await services.policies.get_policy(policy_id))
+

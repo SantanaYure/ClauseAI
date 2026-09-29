@@ -28,6 +28,7 @@ import { contractTone, documentStatusTone, policyStatusTone } from '../../shared
 import { useApiData } from '../../shared/useApiData';
 import type { Concept, ConceptOccurrence, ContractStatus, PolicyDetail } from '../../types/domain';
 import { setFlash } from '../../shared/flash';
+import { CancelExtractionButton } from './CancelExtractionButton';
 import { DeletePolicyButton } from './DeletePolicyButton';
 
 type Filter = 'ALL' | ContractStatus;
@@ -97,13 +98,20 @@ function PolicyDetailView({ policy, concepts, back }: ViewProps) {
       />
 
       {isPolicyBusy(policy.status) && (
-        <p className="processing-note processing-note--block" role="status">
-          <Spinner />
-          <span>
-            <strong>Processando esta apólice.</strong>
-            {describeProcessing(policy.documents)} A página se atualiza sozinha.
-          </span>
-        </p>
+        <div className="stack">
+          <p className="processing-note processing-note--block" role="status">
+            <Spinner />
+            <span>
+              <strong>Processando esta apólice.</strong>
+              {describeProcessing(policy.documents)} A página se atualiza sozinha.
+            </span>
+          </p>
+          <CancelExtractionButton
+            policyId={policy.id}
+            policyName={policy.name}
+            variant="block"
+          />
+        </div>
       )}
 
       <dl className="facts card">

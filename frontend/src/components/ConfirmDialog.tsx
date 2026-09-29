@@ -1,22 +1,28 @@
 import { useEffect, useId, useRef, type ReactNode } from 'react';
-import { Icon } from './Icon';
+import { Icon, type IconName } from './Icon';
 import { Spinner } from './Spinner';
 
 type ConfirmDialogProps = {
   title: string;
   children: ReactNode;
   confirmLabel: string;
+  confirmIcon?: IconName;
+  busyLabel?: string;
+  confirmVariant?: 'danger' | 'secondary' | 'primary';
   busy?: boolean;
   error?: string | null;
   onConfirm: () => void;
   onCancel: () => void;
 };
 
-/** Confirmação para ações destrutivas: foco inicial em "Cancelar" e Esc fecha. */
+/** Confirmação para ações críticas ou destrutivas: foco inicial em "Cancelar" e Esc fecha. */
 export function ConfirmDialog({
   title,
   children,
   confirmLabel,
+  confirmIcon = 'trash',
+  busyLabel,
+  confirmVariant = 'danger',
   busy = false,
   error = null,
   onConfirm,
@@ -67,9 +73,14 @@ export function ConfirmDialog({
           >
             Cancelar
           </button>
-          <button type="button" className="btn btn--danger" onClick={onConfirm} disabled={busy}>
-            {busy ? <Spinner size="sm" /> : <Icon name="trash" size={18} />}
-            {busy ? 'Excluindo…' : confirmLabel}
+          <button
+            type="button"
+            className={`btn btn--${confirmVariant}`}
+            onClick={onConfirm}
+            disabled={busy}
+          >
+            {busy ? <Spinner size="sm" /> : <Icon name={confirmIcon} size={18} />}
+            {busy ? (busyLabel ?? `${confirmLabel}…`) : confirmLabel}
           </button>
         </div>
       </div>

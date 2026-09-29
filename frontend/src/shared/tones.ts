@@ -70,11 +70,14 @@ export function policyStatusTone(status: PolicyStatus): Tone {
       return 'info';
     case 'FAILED':
       return 'danger';
+    case 'CANCELLED':
+      return 'neutral';
   }
 }
 
 export function documentStatusTone(status: DocumentStatus): Tone {
   if (status === 'COMPLETED') return 'success';
   if (status === 'FAILED') return 'danger';
+  if (status === 'CANCELLED') return 'neutral';
   return 'info';
 }

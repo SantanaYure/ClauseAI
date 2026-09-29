@@ -147,3 +147,16 @@ def test_comparisons_stay_in_history_after_policy_deletion(tmp_path: Path) -> No
         comparison = client.get(url).json()
         assert comparison["status"] == "COMPLETED"
         assert len(comparison["items"]) == 31
+
+
+def test_cancel_policy_endpoint(tmp_path: Path) -> None:
+    with TestClient(build_test_app(tmp_path)) as client:
+        policy_id = upload(client, ["POLICY"])
+        # Wait until extraction finishes
+        wait_for(client, f"/api/v1/policies/{policy_id}", {"READY", "ATTENTION", "FAILED"})
+
+        # Trying to cancel a completed policy returns 400 Bad Request
+        response = client.post(f"/api/v1/policies/{policy_id}/cancel")
+        assert response.status_code == 400
+        assert response.json()["error"]["code"] == "POLICY_NOT_PROCESSING"
+

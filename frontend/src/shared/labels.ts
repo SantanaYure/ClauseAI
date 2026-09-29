@@ -57,6 +57,7 @@ export const DOCUMENT_STATUS_LABELS: Record<DocumentStatus, string> = {
   VALIDATING: 'Validando',
   COMPLETED: 'Processado',
   FAILED: 'Falhou',
+  CANCELLED: 'Cancelado',
 };
 
 export const POLICY_STATUS_LABELS: Record<PolicyStatus, string> = {
@@ -64,6 +65,7 @@ export const POLICY_STATUS_LABELS: Record<PolicyStatus, string> = {
   ATTENTION: 'Com alerta',
   PROCESSING: 'Processando',
   FAILED: 'Falhou',
+  CANCELLED: 'Cancelada',
 };
 
 export const FILE_KIND_LABELS: Record<FileKind, string> = {
