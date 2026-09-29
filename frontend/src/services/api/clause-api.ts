@@ -2,6 +2,7 @@
 // docs/architecture/PERSISTENCE_AND_API.md (base /api/v1). As respostas em snake_case
 // são convertidas para os tipos camelCase de src/types/domain.ts.
 import { appConfig } from '../../config/env';
+import { friendlyMessage } from '../../shared/apiErrors';
 import type {
   ComparisonListItem,
   ComparisonPolicyRef,
@@ -21,18 +22,25 @@ import type {
 export class ApiError extends Error {
   readonly code: string;
   readonly correlationId: string | null;
+  /** Mensagem original da API (cita o nome do arquivo); `message` é a versão amigável. */
+  readonly detail: string;
 
-  constructor(code: string, message: string, correlationId: string | null = null) {
+  constructor(
+    code: string,
+    message: string,
+    correlationId: string | null = null,
+    detail: string = message,
+  ) {
     super(message);
     this.name = 'ApiError';
     this.code = code;
     this.correlationId = correlationId;
+    this.detail = detail;
   }
 }
 
-/** Limites de upload; valores definitivos são configuração operacional (SPEC-001). */
-export const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024;
-export const ACCEPTED_MIME_TYPES = ['application/pdf', 'image/jpeg', 'image/png'];
+/** Limite de upload por arquivo (configuração operacional, SPEC-001). */
+export const MAX_FILE_SIZE_BYTES = appConfig.maxUploadBytes;
 export const COMPARABLE_POLICY_STATUSES: PolicyStatus[] = ['READY', 'ATTENTION'];
 
 const BASE_URL = `${appConfig.apiBaseUrl}/api/v1`;
@@ -76,32 +84,36 @@ type ErrorEnvelope = {
   error?: { code?: string; message?: string; correlation_id?: string };
 };
 
-const REQUEST_TIMEOUT_MS = 20_000;
+type RequestOptions = { timeoutMs?: number; timeoutCode?: string };
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+async function request<T>(
+  path: string,
+  init: RequestInit = {},
+  { timeoutMs = appConfig.requestTimeoutMs, timeoutCode = 'REQUEST_TIMEOUT' }: RequestOptions = {},
+): Promise<T> {
   let response: Response;
   try {
     response = await fetch(`${BASE_URL}${path}`, {
       ...init,
       headers: { Accept: 'application/json', ...init.headers },
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      signal: AbortSignal.timeout(timeoutMs),
     });
   } catch (error) {
     if (error instanceof DOMException && error.name === 'TimeoutError') {
-      throw new ApiError('REQUEST_TIMEOUT', 'A API demorou demais para responder.');
+      throw new ApiError(timeoutCode, friendlyMessage(timeoutCode, 'A API demorou demais.'));
     }
-    throw new ApiError(
-      'NETWORK_ERROR',
-      'Não foi possível conectar à API. Verifique se o backend está em execução.',
-    );
+    throw new ApiError('NETWORK_ERROR', friendlyMessage('NETWORK_ERROR', 'Sem conexão.'));
   }
 
   if (!response.ok) {
     const envelope = (await response.json().catch(() => ({}))) as ErrorEnvelope;
+    const code = envelope.error?.code ?? `HTTP_${response.status}`;
+    const detail = envelope.error?.message ?? 'A API não conseguiu atender a solicitação.';
     throw new ApiError(
-      envelope.error?.code ?? `HTTP_${response.status}`,
-      envelope.error?.message ?? 'A API não conseguiu atender a solicitação.',
+      code,
+      friendlyMessage(code, detail),
       envelope.error?.correlation_id ?? null,
+      detail,
     );
   }
 
@@ -154,10 +166,11 @@ export const clauseApi = {
       form.append('files', upload.file, upload.file.name);
       form.append('document_types', upload.type);
     }
-    const created = await request<{ policyId: string }>('/policies', {
-      method: 'POST',
-      body: form,
-    });
+    const created = await request<{ policyId: string }>(
+      '/policies',
+      { method: 'POST', body: form },
+      { timeoutMs: appConfig.uploadTimeoutMs, timeoutCode: 'UPLOAD_TIMEOUT' },
+    );
     notifyChange();
     return created;
   },

@@ -72,6 +72,7 @@ export const FILE_KIND_LABELS: Record<FileKind, string> = {
   SEARCHABLE_PDF: 'PDF pesquisável',
   SCANNED_PDF: 'PDF digitalizado',
   IMAGE: 'Imagem',
+  DOCX: 'Documento Word',
 };
 
 export const METHOD_LABELS: Record<ExtractionMethod, string> = {
