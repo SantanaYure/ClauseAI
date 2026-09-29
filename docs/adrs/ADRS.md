@@ -58,7 +58,7 @@ Status permitido: `Accepted`, `Proposed`, `Superseded`. ADRs registram decisões
 
 ## ADR-007 — Groq/GPT-OSS-120B para comparação
 
-- **Status:** Accepted
+- **Status:** Superseded pelo ADR-023
 - **Contexto/problema:** interpretação de texto requer modelo separado da extração.
 - **Decisão:** Groq hospedando GPT-OSS-120B para avaliação por conceito e resumo executivo, sujeito a validação operacional (ver ADR-018).
 - **Alternativas:** usar Gemini para tudo; comparação apenas por regras.
@@ -185,7 +185,7 @@ Status permitido: `Accepted`, `Proposed`, `Superseded`. ADRs registram decisões
 ## ADR-021 — Worker em fila e adaptador de persistência em memória
 
 - **Status:** Accepted
-- **Contexto/problema:** o HTTP precisa responder `202` sem esperar o Gemini e o Groq, e os testes automatizados não devem depender do Firebase nem das chaves de IA.
+- **Contexto/problema:** o HTTP precisa responder `202` sem esperar o Gemini, e os testes automatizados não devem depender do Firebase nem das chaves de IA.
 - **Decisão:** `QueuedEventBus` envolve o `InMemoryEventBus` com uma `asyncio.Queue` e workers iniciados no ciclo de vida do FastAPI (`WORKER_CONCURRENCY`). `PERSISTENCE_BACKEND=memory` troca Firestore/Storage por repositórios em memória e pasta local, sem nenhum dado pré-carregado; o padrão é `firebase`.
 - **Alternativas:** `BackgroundTasks` do FastAPI; fila externa desde o início; Firebase Emulator nos testes.
 - **Consequências:** API responsiva e testes rápidos e determinísticos; o modo memória perde dados ao reiniciar.
@@ -199,3 +199,12 @@ Status permitido: `Accepted`, `Proposed`, `Superseded`. ADRs registram decisões
 - **Alternativas:** exigir o plano Blaze; não guardar os originais.
 - **Consequências:** custo zero e configuração mais simples; os originais existem só na máquina do backend.
 - **Riscos:** perder a pasta impede reprocessar documentos (apólices e comparações continuam no Firestore); para publicar o backend na nuvem é preciso usar `STORAGE_BACKEND=firebase` ou outro armazenamento de objetos.
+
+## ADR-023 — Gemini 3.5 Flash Lite em todas as etapas de IA
+
+- **Status:** Accepted (substitui o ADR-007)
+- **Contexto/problema:** o plano gratuito do Groq limita a 8.000 tokens por minuto, e uma comparação completa precisa de dezenas de milhares; na prática, as comparações falhavam por limite de uso (HTTP 429) ou levavam vários minutos. Manter dois provedores também exige duas chaves e duas integrações.
+- **Decisão:** usar o Gemini 3.5 Flash Lite para extração, avaliação por conceito (`P-ASSESS-001`) e conclusão (`P-EXECUTIVE-001`), com um único `GeminiClient` compartilhado. As travas determinísticas e o `ScoringService` não mudam: a IA continua só propondo Resultado-base e Fator de Ajuste.
+- **Alternativas:** Groq no plano pago (Dev Tier); outro provedor para a avaliação.
+- **Consequências:** uma chave, uma integração e comparações mais rápidas; perde-se a separação entre o modelo que extrai e o que avalia.
+- **Riscos:** o mesmo modelo lê e avalia, e pode repetir um erro de leitura na avaliação. Mitigado pelas travas determinísticas, pela exigência de evidência literal e pelo Quality Gate. O limite de uso do Gemini segue tratado com espera pelo tempo pedido (HTTP 429).

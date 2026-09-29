@@ -39,16 +39,12 @@ class Settings(BaseSettings):
     firebase_private_key: str | None = None
     firebase_storage_bucket: str | None = None
 
-    # Gemini: extraction and multimodal OCR (ADR-006).
+    # Gemini 3.5 Flash Lite: extraction, OCR, concept assessment and conclusion (ADR-006, ADR-023).
     gemini_api_key: str | None = None
     gemini_model: str = "gemini-3.5-flash-lite"
 
-    # Groq / GPT-OSS: concept assessment and executive conclusion (ADR-007).
-    groq_api_key: str | None = None
-    groq_model: str = "openai/gpt-oss-120b"
-    # Concepts per assessment call; smaller batches fit free-tier tokens-per-minute limits.
-    groq_batch_size: int = Field(default=6, ge=1, le=15)
-    groq_reasoning_effort: Literal["low", "medium", "high"] = "low"
+    # Concepts per assessment call (P-ASSESS-001).
+    assessment_batch_size: int = Field(default=10, ge=1, le=31)
 
     ai_timeout_seconds: float = 120.0
     ai_max_attempts: int = Field(default=3, ge=1, le=5)
@@ -83,14 +79,7 @@ class Settings(BaseSettings):
     def missing_required(self) -> list[str]:
         """Names of the variables the configured runtime still needs."""
 
-        missing = [
-            name
-            for name, value in (
-                ("GEMINI_API_KEY", self.gemini_api_key),
-                ("GROQ_API_KEY", self.groq_api_key),
-            )
-            if not value
-        ]
+        missing = [] if self.gemini_api_key else ["GEMINI_API_KEY"]
         if self.storage_backend == "firebase" and not self.firebase_storage_bucket:
             missing.append("FIREBASE_STORAGE_BUCKET")
         if "firebase" in (self.persistence_backend, self.storage_backend):

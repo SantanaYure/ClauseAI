@@ -22,8 +22,7 @@ ClauseAI/
 │   │   │   ├── repositories/
 │   │   │   ├── storage/
 │   │   │   ├── ai/
-│   │   │   │   ├── gemini/
-│   │   │   │   ├── groq/
+│   │   │   │   ├── gemini_client.py  # cliente único: extração, avaliação e conclusão
 │   │   │   │   └── prompts/       # P-SYSTEM, P-INTAKE, P-EXTRACT, P-NORMALIZE, P-ASSESS, P-EXECUTIVE, P-QUERY
 │   │   │   ├── pdf/               # leitura nativa de PDF
 │   │   │   ├── knowledge_base/    # seed e leitura versionada do catálogo e pesos
@@ -78,7 +77,7 @@ Implementa casos de uso e coordena portas. Commands representam intenção de mu
 
 ### `infrastructure`
 
-Implementa contratos com Firebase, Storage, Gemini, Groq e Event Bus. Conversões entre modelos externos e modelos internos ficam aqui. Cada provider registra nome, versão e métricas sem vazar resposta bruta para o domínio.
+Implementa contratos com Firebase, Storage, Gemini e Event Bus. Conversões entre modelos externos e modelos internos ficam aqui. Cada provider registra nome, versão e métricas sem vazar resposta bruta para o domínio.
 
 ### `presentation`
 
@@ -148,7 +147,7 @@ Cada handler recebe um evento, carrega o mínimo necessário, executa uma ação
 | `NormalizeEvidenceHandler` | vincula evidências ao catálogo e publica `EvidenceNormalized` |
 | `PersistPolicyHandler` | faz upsert idempotente da apólice e ocorrências e publica `PolicyStored` |
 | `RunDeterministicComparisonHandler` | carrega duas apólices e gera fatos comparáveis por `concept_id` |
-| `AssessConceptsHandler` | envia ocorrências e critérios ao Groq e grava avaliações validadas |
+| `AssessConceptsHandler` | envia ocorrências e critérios ao Gemini e grava avaliações validadas |
 | `CalculateScoresHandler` | executa `ScoringService` para perfil base e perfis de risco |
 | `GenerateExecutiveSummaryHandler` | gera resumo executivo sobre números calculados |
 | `CompleteComparisonHandler` | executa `QualityGate`, consolida estados e publica `ComparisonCompleted` |
@@ -166,7 +165,7 @@ Cada handler recebe um evento, carrega o mínimo necessário, executa uma ação
 - `types`: tipos derivados dos contratos públicos, sem replicar regras de domínio.
 - `components`: componentes de apresentação reutilizáveis sem chamadas de API ocultas.
 
-O frontend não chama Firebase, Gemini ou Groq. Polling de status deve parar em `COMPLETED` ou `FAILED`, ter intervalo limitado e exibir `correlation_id` quando houver erro.
+O frontend não chama Firebase nem Gemini. Polling de status deve parar em `COMPLETED` ou `FAILED`, ter intervalo limitado e exibir `correlation_id` quando houver erro.
 
 ## 6. Regras de dependência
 

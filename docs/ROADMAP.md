@@ -28,7 +28,7 @@ Sequência recomendada para uma pessoa. Cada fase só avança quando sua defini�
 - **Dependências:** Fase 2.
 - **Entregável:** interfaces, fakes de repositories/Storage/AI/Event Bus, seed da base de conhecimento, fixtures e schemas de API.
 - **Definition of Done:** casos de uso principais passam com fakes e falhas são classificadas.
-- **Pode ser mockado:** Gemini, Groq, Firestore, Storage e relógio.
+- **Pode ser mockado:** Gemini, Firestore, Storage e relógio.
 - **Equipe de seguros:** fornecer 2–5 documentos anonimizados e expected fields.
 
 ## Fase 4 — Backend base
@@ -88,10 +88,10 @@ Sequência recomendada para uma pessoa. Cada fase só avança quando sua defini�
 ## Fase 10 — Avaliação, pontuação e decisão
 
 - **Objetivo:** avaliar conceitos, pontuar e recomendar de forma condicionada sem ultrapassar evidências.
-- **Dependências:** Fase 9, acesso Groq e revisão de prompts.
-- **Entregável:** Groq adapter, `P-ASSESS-001`, `ScoringService`, perfis de risco, `P-EXECUTIVE-001`, `QualityGate`, `POST /queries` e falha parcial.
+- **Dependências:** Fase 9, acesso ao Gemini e revisão de prompts.
+- **Entregável:** avaliação com Gemini, `P-ASSESS-001`, `ScoringService`, perfis de risco, `P-EXECUTIVE-001`, `QualityGate`, `POST /queries` e falha parcial.
 - **Definition of Done:** avaliações fora da escala são rejeitadas; fórmulas, pareceres e perfis passam na tabela de casos (incluindo total 207 e o exemplo 77,6 % × 79,4 %); resumo não cria números; “Consulte seu corretor de seguros.” aparece nas limitações.
-- **Pode ser mockado:** Groq para maioria dos testes; smoke test real controlado.
+- **Pode ser mockado:** Gemini na maioria dos testes; smoke test real controlado.
 - **Equipe de seguros:** confirmar `profile_multiplier`, `close_score_threshold` e `min_completeness`.
 
 ## Fase 11 — Frontend

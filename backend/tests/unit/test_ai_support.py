@@ -9,9 +9,9 @@ from app.infrastructure.ai.support import (
 )
 from app.shared.exceptions import InfrastructureError
 
-GROQ_MESSAGE = (
-    "Rate limit reached for model `openai/gpt-oss-120b` on tokens per minute (TPM): "
-    "Limit 8000, Used 6831, Requested 4882. Please try again in 27.8475s."
+RATE_LIMIT_MESSAGE = (
+    "429 RESOURCE_EXHAUSTED. You exceeded your current quota, please check your plan. "
+    "Please retry in 27.8475s."
 )
 
 
@@ -28,8 +28,9 @@ def sleeps(monkeypatch: pytest.MonkeyPatch) -> list[float]:
 
 def test_retry_after_comes_from_header_or_message() -> None:
     assert retry_after_seconds({"retry-after": "12"}, "") == 12
-    assert retry_after_seconds({}, GROQ_MESSAGE) == pytest.approx(27.8475)
+    assert retry_after_seconds({}, RATE_LIMIT_MESSAGE) == pytest.approx(27.8475)
     assert retry_after_seconds(None, "Please try again in 1m30.5s") == pytest.approx(90.5)
+    assert retry_after_seconds(None, "Please retry in 4.2s.") == pytest.approx(4.2)
     assert retry_after_seconds(None, "sem indicação") is None
 
 
@@ -42,11 +43,11 @@ async def test_rate_limit_waits_the_requested_time_without_spending_attempts(
         nonlocal calls
         calls += 1
         if calls <= 3:
-            raise RateLimitedError(GROQ_MESSAGE, retry_after=27.8)
+            raise RateLimitedError(RATE_LIMIT_MESSAGE, retry_after=27.8)
         return "ok"
 
     result = await call_with_retries(
-        operation, provider="groq", model="m", prompt_version="p", max_attempts=1
+        operation, provider="gemini", model="m", prompt_version="p", max_attempts=1
     )
 
     assert result == "ok"
@@ -56,11 +57,11 @@ async def test_rate_limit_waits_the_requested_time_without_spending_attempts(
 
 async def test_rate_limit_gives_up_with_a_clear_code(sleeps: list[float]) -> None:
     async def operation() -> str:
-        raise RateLimitedError(GROQ_MESSAGE, retry_after=5)
+        raise RateLimitedError(RATE_LIMIT_MESSAGE, retry_after=5)
 
     with pytest.raises(InfrastructureError) as error:
         await call_with_retries(
-            operation, provider="groq", model="m", prompt_version="p", max_attempts=3
+            operation, provider="gemini", model="m", prompt_version="p", max_attempts=3
         )
 
     assert error.value.code == "MODEL_RATE_LIMITED"

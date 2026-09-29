@@ -608,7 +608,6 @@ FIREBASE_CLIENT_EMAIL
 FIREBASE_PRIVATE_KEY
 FIREBASE_STORAGE_BUCKET
 GEMINI_API_KEY
-GROQ_API_KEY
 ```
 
 No GitHub, configure em **Settings → Secrets and variables → Actions → New repository secret**. Nesta etapa os workflows não precisam desses secrets porque não executam Firebase ou IA.

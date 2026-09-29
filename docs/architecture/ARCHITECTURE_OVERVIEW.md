@@ -45,8 +45,7 @@ flowchart LR
     WORKER --> KB[Catálogo D&O / pesos]
     WORKER --> SCORE[Scoring Service]
     WORKER --> AI[AI Orchestrator]
-    AI --> GEM[Gemini 3.5 Flash Lite]
-    AI --> GROQ[Groq / GPT-OSS-120B]
+    AI --> GEM[Gemini 3.5 Flash Lite: extração, avaliação e conclusão]
     WORKER --> REPO[Repositories]
     REPO --> FS[(Firestore)]
     REPO --> ST[(Firebase Storage)]
@@ -60,7 +59,7 @@ flowchart LR
 | React UI | Interação, estado de tela e renderização | Acessar Firebase ou providers de IA diretamente |
 | FastAPI | Serializar entrada/saída, autenticar no futuro, mapear erros | Executar regra de negócio ou chamada longa de IA |
 | Application | Orquestrar casos de uso, transações lógicas e publicação de eventos | Conhecer detalhes de HTTP, Firestore ou SDKs de IA |
-| Domain | Entidades, value objects, invariantes e comparação determinística | Importar FastAPI, Firebase ou Gemini/Groq |
+| Domain | Entidades, value objects, invariantes e comparação determinística | Importar FastAPI, Firebase ou Gemini |
 | Document Service (agente de recepção) | Validar arquivo, classificar tipo de documento, persistir original e iniciar processamento | Interpretar cláusulas |
 | Extraction Service (agente de OCR/extração) | Leitura nativa, OCR multimodal, parsing e validação de evidências | Completar texto ilegível por inferência |
 | Normalization Service (agente de cláusulas) | Vincular evidências a conceitos do catálogo e classificar ocorrência/relação/status | Unir conceitos distintos ou declarar equivalência automática |

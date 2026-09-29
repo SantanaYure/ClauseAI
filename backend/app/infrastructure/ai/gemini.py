@@ -3,9 +3,6 @@
 
 from typing import Any
 
-import httpx
-from google import genai
-from google.genai import errors as genai_errors
 from google.genai import types
 from pydantic import BaseModel, Field
 from pydantic import ValidationError as PydanticValidationError
@@ -28,15 +25,12 @@ from app.domain.value_objects import (
     OccurrenceType,
     TermRelation,
 )
+from app.infrastructure.ai.gemini_client import GeminiClient
 from app.infrastructure.ai.support import (
     InvalidModelOutput,
-    RateLimitedError,
-    TransientProviderError,
-    call_with_retries,
     load_prompt,
     parse_json_object,
     render,
-    retry_after_seconds,
 )
 
 PROMPT_VERSION = "P-EXTRACT-001"
@@ -97,18 +91,13 @@ def _native_text(page_texts: dict[int, str]) -> str:
 
 
 class GeminiPolicyExtractor:
-    def __init__(self, api_key: str, model: str, timeout_seconds: float, max_attempts: int) -> None:
-        self._client = genai.Client(
-            api_key=api_key, http_options=types.HttpOptions(timeout=int(timeout_seconds * 1000))
-        )
-        self._model = model
-        self._max_attempts = max_attempts
-        self._system = load_prompt("P-SYSTEM-001")
+    def __init__(self, client: GeminiClient) -> None:
+        self._client = client
         self._template = load_prompt(PROMPT_VERSION)
 
     @property
     def model_name(self) -> str:
-        return self._model
+        return self._client.model
 
     async def extract(
         self, content: DocumentContent, knowledge_base: KnowledgeBase
@@ -122,40 +111,13 @@ class GeminiPolicyExtractor:
         else:
             parts.append(types.Part.from_bytes(data=content.data, mime_type=document.content_type))
 
-        async def run() -> _ExtractionOut:
+        def parse(text: str | None) -> _ExtractionOut:
             try:
-                response = await self._client.aio.models.generate_content(
-                    model=self._model,
-                    contents=parts,
-                    config=types.GenerateContentConfig(
-                        system_instruction=self._system,
-                        temperature=0,
-                        response_mime_type="application/json",
-                        automatic_function_calling=types.AutomaticFunctionCallingConfig(
-                            disable=True
-                        ),
-                    ),
-                )
-            except (genai_errors.ServerError, httpx.TimeoutException, httpx.TransportError) as exc:
-                raise TransientProviderError(str(exc)) from exc
-            except genai_errors.ClientError as exc:
-                if getattr(exc, "code", None) == 429:
-                    raise RateLimitedError(str(exc), retry_after_seconds(None, str(exc))) from exc
-                if getattr(exc, "code", None) == 408:
-                    raise TransientProviderError(str(exc)) from exc
-                raise
-            try:
-                return _ExtractionOut.model_validate(_normalize(parse_json_object(response.text)))
+                return _ExtractionOut.model_validate(_normalize(parse_json_object(text)))
             except PydanticValidationError as exc:
                 raise InvalidModelOutput(str(exc)) from exc
 
-        output = await call_with_retries(
-            run,
-            provider="gemini",
-            model=self._model,
-            prompt_version=PROMPT_VERSION,
-            max_attempts=self._max_attempts,
-        )
+        output = await self._client.generate(parts, PROMPT_VERSION, parse)
         return self._to_domain(output, content, knowledge_base, native)
 
     def _to_domain(
@@ -204,5 +166,8 @@ class GeminiPolicyExtractor:
         if intake.document_type is None:
             intake = intake.model_copy(update={"document_type": DocumentType.OTHER})
         return ExtractionResult(
-            intake=intake, occurrences=occurrences, model=self._model, prompt_version=PROMPT_VERSION
+            intake=intake,
+            occurrences=occurrences,
+            model=self._client.model,
+            prompt_version=PROMPT_VERSION,
         )

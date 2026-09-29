@@ -2,7 +2,7 @@
 
 ## Dependências
 
-O domínio não importa FastAPI, Firebase, Gemini, Groq, bibliotecas de UI ou detalhes de banco. Adapters externos pertencem à infraestrutura. A apresentação traduz HTTP; a aplicação orquestra casos de uso; o domínio mantém contratos independentes.
+O domínio não importa FastAPI, Firebase, Gemini, bibliotecas de UI ou detalhes de banco. Adapters externos pertencem à infraestrutura. A apresentação traduz HTTP; a aplicação orquestra casos de uso; o domínio mantém contratos independentes.
 
 ## Python
 

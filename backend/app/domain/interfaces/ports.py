@@ -99,7 +99,7 @@ class AssessmentRequest:
 
 
 class ConceptAssessor(Protocol):
-    """P-ASSESS-001 (Groq / GPT-OSS)."""
+    """P-ASSESS-001 (Gemini)."""
 
     async def assess(self, requests: list[AssessmentRequest]) -> list[ConceptAssessment]: ...
 
@@ -108,7 +108,7 @@ class ConceptAssessor(Protocol):
 
 
 class SummaryWriter(Protocol):
-    """P-EXECUTIVE-001 (Groq / GPT-OSS): rewrites only the conclusion text."""
+    """P-EXECUTIVE-001 (Gemini): rewrites only the conclusion text."""
 
     async def write_conclusion(
         self, summary: ExecutiveSummary, facts: dict[str, object]

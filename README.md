@@ -17,7 +17,7 @@ O repositório contém um frontend React/TypeScript/SCSS e um backend Python/Fas
 - Frontend: React, TypeScript, Vite e SCSS.
 - Backend: Python, FastAPI e Uvicorn.
 - Qualidade: Ruff, Ruff Formatter, mypy, pytest, ESLint, Prettier e Vitest.
-- Integrações: Firebase Firestore (arquivos originais em pasta local ou, opcionalmente, no Firebase Storage), Gemini 3.5 Flash Lite (extração e OCR multimodal) e GPT-OSS via Groq (avaliação e resumo).
+- Integrações: Firebase Firestore (arquivos originais em pasta local ou, opcionalmente, no Firebase Storage), Gemini 3.5 Flash Lite (extração, OCR multimodal, avaliação por conceito e resumo).
 - Automações: Python (`backend/scripts/`).
 
 ## Requisitos
@@ -98,14 +98,14 @@ npm run build
 
 ## Configuração
 
-Nunca use credenciais reais no repositório: o `.env` é ignorado pelo Git. Preencha `backend/.env` (chaves do Gemini, do Groq e do Firebase; veja a tabela em [`backend/README.md`](backend/README.md)) e, se necessário, `frontend/.env`. Sem as variáveis obrigatórias o backend não sobe e lista o que falta.
+Nunca use credenciais reais no repositório: o `.env` é ignorado pelo Git. Preencha `backend/.env` (chave do Gemini e credenciais do Firebase; veja a tabela em [`backend/README.md`](backend/README.md)) e, se necessário, `frontend/.env`. Sem as variáveis obrigatórias o backend não sobe e lista o que falta.
 
 ## Escopo atual
 
 Implementado:
 
 - **Frontend:** cinco telas navegáveis e mobile first (Início, Apólices, Comparar, Conceitos, Histórico), ligadas à API.
-- **Backend:** upload de apólices com vários documentos, processamento assíncrono, extração com Gemini (texto nativo ou OCR multimodal), normalização pelo catálogo D&O, comparação com avaliação por Groq, pontuação ponderada, perfis de risco, resumo executivo, checklist de qualidade e consulta por conceito.
+- **Backend:** upload de apólices com vários documentos, processamento assíncrono, extração com Gemini (texto nativo ou OCR multimodal), normalização pelo catálogo D&O, comparação com avaliação por conceito pelo Gemini, pontuação ponderada, perfis de risco, resumo executivo, checklist de qualidade e consulta por conceito.
 - Persistência em Firestore e arquivos em pasta local (Firebase Storage opcional), logs estruturados com correlação e testes automatizados.
 
 Não implementado: autenticação, fila durável e endpoints `/documents` isolados. A sequência está em [`docs/ROADMAP.md`](docs/ROADMAP.md).

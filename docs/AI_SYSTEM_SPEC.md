@@ -2,7 +2,7 @@
 
 ## 1. Objetivo
 
-Definir contratos implementáveis para uso de IA no ClauseAI, derivados dos prompts do agente comparador ([base de conhecimento](domain/DO_KNOWLEDGE_BASE.md), seção 9). Gemini 3.5 Flash Lite classifica documentos, extrai evidências (inclusive por OCR multimodal) e normaliza termos contra o catálogo D&O; GPT-OSS-120B via Groq avalia cada conceito dentro de escalas fechadas e redige o resumo executivo. Todos os números (pontos, scores, completude, pareceres e perfis) são calculados pelo backend. Nenhum modelo fornece aconselhamento jurídico, altera pesos ou substitui a validação do corretor: em qualquer dúvida relevante, a saída contém “Consulte seu corretor de seguros.”
+Definir contratos implementáveis para uso de IA no ClauseAI, derivados dos prompts do agente comparador ([base de conhecimento](domain/DO_KNOWLEDGE_BASE.md), seção 9). Gemini 3.5 Flash Lite classifica documentos, extrai evidências (inclusive por OCR multimodal) e normaliza termos contra o catálogo D&O, avalia cada conceito dentro de escalas fechadas e redige a conclusão do resumo executivo (ADR-023). Todos os números (pontos, scores, completude, pareceres e perfis) são calculados pelo backend. Nenhum modelo fornece aconselhamento jurídico, altera pesos ou substitui a validação do corretor: em qualquer dúvida relevante, a saída contém “Consulte seu corretor de seguros.”
 
 > **Nota de configuração:** os nomes e capacidades exatos dos modelos devem ser confirmados na conta/provedor antes da implementação. Essa confirmação é uma dependência operacional, não uma regra para o domínio.
 
@@ -11,7 +11,7 @@ Definir contratos implementáveis para uso de IA no ClauseAI, derivados dos prom
 | Modelo | Entrada | Saída | Não pode fazer |
 |---|---|---|---|
 | Gemini 3.5 Flash Lite | PDF/imagem, catálogo de conceitos, instruções e schema | registro do documento, evidências literais com página/cláusula/confiança, ocorrências de conceito | completar texto ilegível, declarar contratação sem documento contratual, unir conceitos distintos |
-| GPT-OSS-120B via Groq | ocorrências das duas apólices por conceito, itens determinísticos, critério de avaliação e escalas | Resultado-base, Fator de Ajuste, contratação, justificativa e diferença principal por conceito; resumo executivo sobre números já calculados | calcular ou alterar scores, pesos ou pareceres; inventar texto; dar opinião jurídica |
+| Gemini 3.5 Flash Lite (avaliação) | ocorrências das duas apólices por conceito, itens determinísticos, critério de avaliação e escalas | Resultado-base, Fator de Ajuste, contratação, justificativa e diferença principal por conceito; resumo executivo sobre números já calculados | calcular ou alterar scores, pesos ou pareceres; inventar texto; dar opinião jurídica |
 | Backend (sem LLM) | avaliações validadas, pesos e perfis | pontos, scores, completude, pareceres, perfis e Quality Gate | — |
 
 ## 3. AI Orchestrator
@@ -159,7 +159,7 @@ Relações: `EQUAL`, `DIFFERENT`, `ONLY_LEFT`, `ONLY_RIGHT`, `UNKNOWN`, `NOT_COM
 
 ### 8.1 Avaliação (IA)
 
-Para cada conceito ativo, o Groq recebe as ocorrências e evidências das duas apólices, o critério de avaliação e as escalas fechadas. Devolve, por apólice: `contract_status`, `base_result`, `adjustment_factor`, `justification`, `evidence_ids`, `confidence`, `sufficient_evidence` e a `main_difference` entre apólices. A saída é rejeitada se usar valor fora das escalas, omitir justificativa para valor ≠ 1,00, citar evidência inexistente ou pontuar acima de zero um conceito com exclusão expressa.
+Para cada conceito ativo, o Gemini recebe as ocorrências e evidências das duas apólices, o critério de avaliação e as escalas fechadas. Devolve, por apólice: `contract_status`, `base_result`, `adjustment_factor`, `justification`, `evidence_ids`, `confidence`, `sufficient_evidence` e a `main_difference` entre apólices. A saída é rejeitada se usar valor fora das escalas, omitir justificativa para valor ≠ 1,00, citar evidência inexistente ou pontuar acima de zero um conceito com exclusão expressa.
 
 ### 8.2 Pontuação (determinística)
 
@@ -167,7 +167,7 @@ O `ScoringService` do domínio aplica as fórmulas da seção 6.4 da base de con
 
 ### 8.3 Resumo executivo (IA)
 
-O Groq recebe apenas números calculados, pareceres, avaliações e evidências selecionadas e produz o resumo da seção 7.2 da base de conhecimento. Não pode criar números nem trocar pareceres. Se score e leitura qualitativa divergirem, deve explicar a divergência. Se houver informação incompleta, termina com `BROKER_GUIDANCE`.
+O Gemini recebe apenas números calculados, pareceres, avaliações e evidências selecionadas e produz o resumo da seção 7.2 da base de conhecimento. Não pode criar números nem trocar pareceres. Se score e leitura qualitativa divergirem, deve explicar a divergência. Se houver informação incompleta, termina com `BROKER_GUIDANCE`.
 
 O resultado separa `facts`, `interpretations`, `scores`, `recommendation` e `uncertainties`.
 
@@ -234,11 +234,11 @@ Retorne somente JSON válido conforme schema_version=1.
 - **Saída:** estrutura `ExecutiveSummary` do modelo de domínio.
 - **Regras:** não escolher apólice só pelo percentual; declarar `CONDITIONED` quando a completude for baixa ou a decisão depender de conceito crítico inconclusivo.
 
-> **Implementação atual do Groq:** `P-ASSESS-001` avalia em lotes de 8 conceitos; o backend ajusta cada valor à escala permitida, limita `NOT_PROVEN` a 0,25 e `DIVERGENT` a 0,50, zera exclusões e ausências e exige justificativa para reduções. `P-EXECUTIVE-001` reescreve só a conclusão; se ela citar um percentual que não foi calculado, o texto determinístico é mantido. Os modelos são configuráveis em `GEMINI_MODEL` e `GROQ_MODEL`.
+> **Implementação atual da avaliação (Gemini):** `P-ASSESS-001` avalia em lotes de `ASSESSMENT_BATCH_SIZE` conceitos (padrão 10); o backend ajusta cada valor à escala permitida, limita `NOT_PROVEN` a 0,25 e `DIVERGENT` a 0,50, zera exclusões e ausências e exige justificativa para reduções. `P-EXECUTIVE-001` reescreve só a conclusão; se ela citar um percentual que não foi calculado, o texto determinístico é mantido. O modelo é configurável em `GEMINI_MODEL`.
 
 ### P-QUERY-001 — consulta
 
-> **Implementação atual:** a resolução do conceito (variantes e sobreposição de palavras) e a busca das evidências são determinísticas; a resposta é montada sem LLM. Redigir a resposta com o Groq fica como evolução.
+> **Implementação atual:** a resolução do conceito (variantes e sobreposição de palavras) e a busca das evidências são determinísticas; a resposta é montada sem LLM. Redigir a resposta com o Gemini fica como evolução.
 
 - **Objetivo:** responder consultas do usuário sobre a base (documento 3, prompt 6).
 - **Entrada:** pergunta e registros recuperados por filtros determinísticos.

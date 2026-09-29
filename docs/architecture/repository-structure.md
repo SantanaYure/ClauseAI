@@ -34,4 +34,4 @@ Pastas sem implementação de domínio existem apenas quando representam uma fro
 
 ## O que não pertence à fundação
 
-Não adicionar nesta etapa upload, persistência real, SDK Firebase, SDK Gemini/Groq, regras de D&O, comparação, autenticação ou broker externo. Esses itens têm specs e decisões próprias na documentação principal.
+Não adicionar nesta etapa upload, persistência real, SDK Firebase, SDK Gemini, regras de D&O, comparação, autenticação ou broker externo. Esses itens têm specs e decisões próprias na documentação principal.

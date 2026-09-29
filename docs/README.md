@@ -40,7 +40,7 @@ O sistema é um monólito modular com React/TypeScript/SCSS no frontend, Python/
 - Normalização das evidências contra o catálogo de conceitos D&O (DO-001 a DO-044).
 - Persistência de documento, evidências, apólice, coberturas, exclusões, limites, franquias, cláusulas, ocorrências de conceito, pesos e resultados.
 - Consulta por apólice, documento, conceito, variante, seguradora, cláusula, página, importância, peso e status.
-- Comparação determinística de duas apólices e avaliação por conceito (Resultado-base e Fator de Ajuste) com GPT-OSS-120B via Groq.
+- Comparação determinística de duas apólices e avaliação por conceito (Resultado-base e Fator de Ajuste) com Gemini 3.5 Flash Lite.
 - Pontuação ponderada determinística: Pontos Ponderados, Score de Aderência, Score Documental e Índice de Completude.
 - Decisão por perfil de risco (financeiro, internacional, regulatório, cauda, trabalhista e reputacional) e resumo executivo condicionado.
 - Interface web com tabela comparativa, pesos, scores, evidências, alertas e resumo executivo.

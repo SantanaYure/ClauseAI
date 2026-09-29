@@ -35,7 +35,7 @@ class RateLimitedError(TransientProviderError):
 
 MAX_RATE_LIMIT_WAIT_SECONDS = 90.0
 MAX_RATE_LIMIT_WAITS = 8
-_RETRY_IN = re.compile(r"try again in\s+(?:(\d+)m)?([\d.]+)s", re.IGNORECASE)
+_RETRY_IN = re.compile(r"(?:try again|retry) in\s+(?:(\d+)m)?([\d.]+)s", re.IGNORECASE)
 
 
 def retry_after_seconds(headers: Any, message: str) -> float | None:

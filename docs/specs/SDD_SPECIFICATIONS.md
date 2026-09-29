@@ -342,7 +342,7 @@ Entrada: resultado determinístico, ocorrências, evidências selecionadas e cri
 
 ### Dependências
 
-`AIOrchestrator`, Groq provider, prompt `P-ASSESS-001`, catálogo, `ComparisonRepository`.
+`AIOrchestrator`, Gemini (ADR-023), prompt `P-ASSESS-001`, catálogo, `ComparisonRepository`.
 
 ### Regras e erros
 

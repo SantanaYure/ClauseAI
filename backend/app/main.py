@@ -16,8 +16,9 @@ from app.application.use_cases import (
 )
 from app.domain.interfaces.ports import BlobStorage, ComparisonRepository, PolicyRepository
 from app.domain.services.scoring import ScoringParameters
+from app.infrastructure.ai.assessment import GeminiConceptAssessor, GeminiSummaryWriter
 from app.infrastructure.ai.gemini import GeminiPolicyExtractor
-from app.infrastructure.ai.groq import GroqClient, GroqConceptAssessor, GroqSummaryWriter
+from app.infrastructure.ai.gemini_client import GeminiClient
 from app.infrastructure.events import QueuedEventBus
 from app.infrastructure.knowledge_base import JsonConceptCatalog
 from app.infrastructure.pdf import PypdfTextReader
@@ -101,24 +102,18 @@ def build_application(settings: Settings) -> FastAPI:
     storage = _storage(settings, firebase)
 
     catalog = JsonConceptCatalog()
-    groq = GroqClient(
-        api_key=settings.groq_api_key or "",
-        model=settings.groq_model,
+    gemini = GeminiClient(
+        api_key=settings.gemini_api_key or "",
+        model=settings.gemini_model,
         timeout_seconds=settings.ai_timeout_seconds,
         max_attempts=settings.ai_max_attempts,
-        batch_size=settings.groq_batch_size,
-        reasoning_effort=settings.groq_reasoning_effort,
+        assessment_batch_size=settings.assessment_batch_size,
     )
     policy_service = PolicyService(
         repository=policies,
         storage=storage,
         catalog=catalog,
-        extractor=GeminiPolicyExtractor(
-            api_key=settings.gemini_api_key or "",
-            model=settings.gemini_model,
-            timeout_seconds=settings.ai_timeout_seconds,
-            max_attempts=settings.ai_max_attempts,
-        ),
+        extractor=GeminiPolicyExtractor(gemini),
         pdf_reader=PypdfTextReader(),
         event_bus=event_bus,
         limits=UploadLimits(
@@ -131,8 +126,8 @@ def build_application(settings: Settings) -> FastAPI:
         comparisons=comparisons,
         policies=policies,
         catalog=catalog,
-        assessor=GroqConceptAssessor(groq),
-        summary_writer=GroqSummaryWriter(groq),
+        assessor=GeminiConceptAssessor(gemini),
+        summary_writer=GeminiSummaryWriter(gemini),
         event_bus=event_bus,
         parameters=ScoringParameters(
             profile_multiplier=Decimal(str(settings.profile_multiplier)),
