@@ -36,7 +36,8 @@ keys/
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json
-.claude/
+.claude/*
+!.claude/agents/
 *.swp
 *.swo
 .DS_Store
