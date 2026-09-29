@@ -23,7 +23,8 @@ from docx.section import Section, _Footer, _Header
 from docx.table import Table, _Cell
 from docx.text.hyperlink import Hyperlink
 from docx.text.paragraph import Paragraph
-from lxml.etree import XMLSyntaxError
+from docx.text.run import Run
+from lxml.etree import XMLSyntaxError  # type: ignore[import-untyped]
 
 from app.domain.interfaces.ports import DocumentUnreadableError, DocxText
 
@@ -57,15 +58,21 @@ class _Pages:
         return {number: "\n".join(page) for number, page in enumerate(blocks, start=1)}
 
 
+def _is_page_break(run: Run) -> bool:
+    """Explicit break only: `Run.contains_page_break` reports Word's rendered guess."""
+
+    return bool(run._r.xpath('./w:br[@w:type="page"]'))
+
+
 def _has_page_break(paragraph: Paragraph) -> bool:
-    return any(run.contains_page_break for run in paragraph.runs)
+    return any(_is_page_break(run) for run in paragraph.runs)
 
 
 def _list_depth(paragraph: Paragraph) -> int | None:
     properties = paragraph._p.pPr
     if properties is not None and properties.numPr is not None:
-        level = properties.numPr.ilvl
-        return int(level.val) if level is not None else 0
+        levels = properties.xpath("./w:numPr/w:ilvl/@w:val")
+        return int(levels[0]) if levels else 0
     style = paragraph.style
     return 0 if style is not None and (style.name or "").startswith("List") else None
 
@@ -97,13 +104,13 @@ def _cell_text(cell: _Cell) -> str:
 
 
 def _table_rows(table: Table) -> Iterator[str]:
-    seen: set[int] = set()  # merged cells repeat: keep them at their first column
+    seen: set[object] = set()  # merged cells repeat: keep them at their first column
     for row_number, row in enumerate(table.rows, start=1):
         cells: list[str] = []
         for column, cell in enumerate(row.cells, start=1):
-            if id(cell._tc) in seen:
+            if cell._tc in seen:
                 continue
-            seen.add(id(cell._tc))
+            seen.add(cell._tc)
             text = _cell_text(cell)
             if text:
                 cells.append(f"[Coluna {column}] {text}")
@@ -185,7 +192,7 @@ class PythonDocxTextReader:
 
         for item in paragraph.iter_inner_content():
             buffer.append(item.text)
-            if not isinstance(item, Hyperlink) and item.contains_page_break:
+            if not isinstance(item, Hyperlink) and _is_page_break(item):
                 flush()
                 pages.break_page()
         flush()

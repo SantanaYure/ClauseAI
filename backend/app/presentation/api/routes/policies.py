@@ -91,4 +91,3 @@ async def delete_policy(policy_id: str, services: Services) -> None:
 @router.get("/{policy_id}", response_model=PolicyDetailResponse)
 async def get_policy(policy_id: str, services: Services) -> PolicyDetailResponse:
     return PolicyDetailResponse.of(await services.policies.get_policy(policy_id))
-

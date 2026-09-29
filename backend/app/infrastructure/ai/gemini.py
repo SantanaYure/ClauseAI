@@ -25,7 +25,6 @@ from app.domain.value_objects import (
     OccurrenceType,
     TermRelation,
 )
-from app.shared.exceptions import ApplicationError
 from app.infrastructure.ai.gemini_client import GeminiClient
 from app.infrastructure.ai.support import (
     InvalidModelOutput,
@@ -33,6 +32,7 @@ from app.infrastructure.ai.support import (
     parse_json_object,
     render,
 )
+from app.shared.exceptions import ApplicationError
 
 PROMPT_VERSION = "P-EXTRACT-001"
 MAX_CATALOG_VARIANTS = 6

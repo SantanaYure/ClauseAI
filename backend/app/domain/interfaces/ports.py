@@ -69,6 +69,8 @@ MIN_CHARS_PER_PAGE = 40
 class PdfText:
     page_count: int
     page_texts: dict[int, str]
+    encrypted: bool = False
+    unreadable: bool = False
 
     @property
     def searchable(self) -> bool:

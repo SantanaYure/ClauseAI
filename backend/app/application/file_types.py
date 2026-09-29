@@ -22,7 +22,7 @@ _ZIP_SIGNATURE = b"PK\x03\x04"
 # Password-protected Office files (and legacy .doc) are OLE containers, not zips.
 _OLE_SIGNATURE = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
 
-_CONTENT_TYPES_PART = "[Content-Types].xml"
+_CONTENT_TYPES_PART = "[Content_Types].xml"
 _DOCX_MAIN_PART = "word/document.xml"
 # Excludes macro-enabled (.docm) and template (.dotx) main parts on purpose.
 _DOCX_MAIN_CONTENT_TYPE = (

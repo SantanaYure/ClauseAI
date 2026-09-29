@@ -8,6 +8,7 @@ from app.infrastructure.events import InMemoryEventBus
 from app.infrastructure.knowledge_base import JsonConceptCatalog
 from app.infrastructure.persistence import InMemoryPolicyRepository
 from app.infrastructure.storage import LocalBlobStorage
+from app.infrastructure.word import PythonDocxTextReader
 from app.shared.exceptions import ApplicationError
 
 from tests.fakes import FakeExtractor, FakePdfReader
@@ -21,6 +22,7 @@ def _make_service(tmp_path: Path) -> tuple[PolicyService, InMemoryPolicyReposito
         catalog=JsonConceptCatalog(),
         extractor=FakeExtractor(),
         pdf_reader=FakePdfReader(),
+        docx_reader=PythonDocxTextReader(),
         event_bus=InMemoryEventBus(),
         limits=UploadLimits(max_file_bytes=1024, max_files=5, min_evidence_confidence=0.7),
     )

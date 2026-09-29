@@ -32,6 +32,7 @@ from app.domain.interfaces.ports import (
     DocumentContent,
     DocumentUnreadableError,
     DocxTextReader,
+    PdfText,
     PdfTextReader,
     PolicyExtractor,
     PolicyRepository,
@@ -68,6 +69,23 @@ _OFFICE_ERRORS = {
         "O arquivo {name} está corrompido e não pôde ser aberto. Gere o DOCX novamente.",
     ),
 }
+
+_PDF_PROTECTED = (
+    "PDF_PROTECTED",
+    "O arquivo {name} está protegido por senha. Remova a proteção e envie novamente.",
+)
+_PDF_CORRUPTED = (
+    "PDF_CORRUPTED",
+    "O arquivo {name} está corrompido e não pôde ser aberto. Gere o PDF novamente.",
+)
+
+
+def _check_pdf(pdf: PdfText, filename: str) -> None:
+    problem = _PDF_PROTECTED if pdf.encrypted else _PDF_CORRUPTED if pdf.unreadable else None
+    if problem is not None:
+        code, message = problem
+        raise invalid(code, message.format(name=filename), status_code=422)
+
 
 @dataclass(frozen=True, slots=True)
 class UploadLimits:
@@ -126,6 +144,8 @@ class PolicyService:
                 raise self._unsupported(file)
             if detected == DOCX_MIME:
                 await self._validate_docx(file)
+            elif detected == PDF_MIME:
+                _check_pdf(await asyncio.to_thread(self._pdf_reader.read, file.data), file.filename)
             content_types.append(detected)
         return content_types
 
@@ -205,10 +225,23 @@ class PolicyService:
         if policy is None or policy.status != PolicyStatus.PROCESSING:
             return  # idempotent: already processed
 
-        current_task = asyncio.current_task()
-        if current_task is not None:
-            self._running_tasks[policy_id] = current_task
+        # Run in its own task: cancelling a policy must stop this job, not the
+        # queue worker that is executing the handler.
+        job = asyncio.create_task(self._process(policy))
+        self._running_tasks[policy_id] = job
+        try:
+            await job
+        except asyncio.CancelledError:
+            current = asyncio.current_task()
+            if current is not None and current.cancelling():
+                job.cancel()  # the worker itself is stopping (shutdown)
+                raise
+            logger.info("Policy processing cancelled via task cancellation")
+        finally:
+            self._running_tasks.pop(policy_id, None)
 
+    async def _process(self, policy: Policy) -> None:
+        policy_id = policy.id
         try:
             knowledge_base = self._catalog.load()
             occurrences: list[ConceptOccurrence] = []
@@ -222,7 +255,9 @@ class PolicyService:
                         return
 
                     try:
-                        found, intake = await self._process_document(policy, document, knowledge_base)
+                        found, intake = await self._process_document(
+                            policy, document, knowledge_base
+                        )
                         occurrences.extend(found)
                         intakes.append((document, intake))
                     except ApplicationError as exc:
@@ -253,10 +288,8 @@ class PolicyService:
                 await self._save(policy)
                 logger.info("Policy processed")
         except asyncio.CancelledError:
-            logger.info("Policy processing cancelled via task cancellation")
+            logger.info("Policy processing cancelled")
             raise
-        finally:
-            self._running_tasks.pop(policy_id, None)
 
     async def cancel_policy(self, policy_id: str) -> Policy:
         policy = await self.get_policy(policy_id)
@@ -297,7 +330,8 @@ class PolicyService:
 
         page_texts: dict[int, str] = {}
         if document.content_type == PDF_MIME:
-            pdf = self._pdf_reader.read(data)
+            pdf = await asyncio.to_thread(self._pdf_reader.read, data)
+            _check_pdf(pdf, document.filename)
             document.pages = max(pdf.page_count, 1)
             document.file_kind = FileKind.SEARCHABLE_PDF if pdf.searchable else FileKind.SCANNED_PDF
             document.ocr_required = not pdf.searchable

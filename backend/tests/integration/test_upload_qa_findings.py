@@ -5,7 +5,6 @@ Cada teste falha hoje e deve passar depois da correção (ver relatório do QA).
 
 import asyncio
 import io
-import zipfile
 from pathlib import Path
 
 import pypdf
@@ -15,17 +14,13 @@ from app.domain.value_objects import DocumentStatus, DocumentType, PolicyStatus
 from app.infrastructure.pdf import PypdfTextReader
 from fastapi.testclient import TestClient
 
-from tests.fakes import FakeExtractor, build_test_app
+from tests.fakes import FakeExtractor, build_test_app, make_docx
 
 DOCX_CT = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
 
 def _docx_bytes() -> bytes:
-    buffer = io.BytesIO()
-    with zipfile.ZipFile(buffer, "w") as archive:
-        archive.writestr("[Content_Types].xml", "<Types/>")
-        archive.writestr("word/document.xml", "<w:document/>")
-    return buffer.getvalue()
+    return make_docx()
 
 
 def _post(client: TestClient, name: str, data: bytes, content_type: str):  # type: ignore[no-untyped-def]

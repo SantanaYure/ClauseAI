@@ -1,5 +1,6 @@
 """Test doubles for the AI ports. They exist only in tests; the app never uses them."""
 
+import io
 from pathlib import Path
 
 from app.application.use_cases import (
@@ -33,9 +34,11 @@ from app.infrastructure.events import QueuedEventBus
 from app.infrastructure.knowledge_base import JsonConceptCatalog
 from app.infrastructure.persistence import InMemoryComparisonRepository, InMemoryPolicyRepository
 from app.infrastructure.storage import LocalBlobStorage
+from app.infrastructure.word import PythonDocxTextReader
 from app.presentation.api.app import create_app
 from app.presentation.api.dependencies import ApiServices
 from app.shared.config.settings import Settings
+from docx import Document
 from fastapi import FastAPI
 
 
@@ -104,6 +107,20 @@ class FakeExtractor:
         )
 
 
+class RecordingExtractor(FakeExtractor):
+    """FakeExtractor that keeps what the pipeline handed over for each document."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.contents: list[DocumentContent] = []
+
+    async def extract(
+        self, content: DocumentContent, knowledge_base: KnowledgeBase
+    ) -> ExtractionResult:
+        self.contents.append(content)
+        return await super().extract(content, knowledge_base)
+
+
 class FakeAssessor:
     model_name = "fake-assessor"
 
@@ -133,7 +150,14 @@ class FakeSummaryWriter:
 
 
 class FakePdfReader:
+    """Stand-in for pypdf: a body of only comments is a valid stub, other text is garbage."""
+
     def read(self, data: bytes) -> PdfText:
+        if b"/Encrypt" in data:
+            return PdfText(page_count=0, page_texts={}, encrypted=True)
+        body = data.split(b"\n", 1)[1] if b"\n" in data else b""
+        if any(line.strip() and not line.startswith(b"%") for line in body.splitlines()):
+            return PdfText(page_count=0, page_texts={}, unreadable=True)
         return PdfText(page_count=2, page_texts={})
 
 
@@ -148,6 +172,7 @@ def build_test_app(tmp_path: Path, extractor: FakeExtractor | None = None) -> Fa
         catalog=catalog,
         extractor=extractor or FakeExtractor(),
         pdf_reader=FakePdfReader(),
+        docx_reader=PythonDocxTextReader(),
         event_bus=bus,
         limits=UploadLimits(max_file_bytes=1024 * 1024, max_files=5, min_evidence_confidence=0.7),
     )
@@ -172,3 +197,25 @@ def build_test_app(tmp_path: Path, extractor: FakeExtractor | None = None) -> Fa
 
 PDF_BYTES = b"%PDF-1.4\n% documento de teste\n"
 POLICY_TYPE = DocumentType.POLICY
+
+
+def make_docx(*, with_table: bool = True, header: str | None = "Cabeçalho da Apólice") -> bytes:
+    """Build a small policy DOCX in memory (headings, list, table, header, page break)."""
+
+    document = Document()
+    if header:
+        document.sections[0].header.paragraphs[0].text = header
+    document.add_heading("Condições Gerais", level=1)
+    document.add_paragraph("1.1 A seguradora cobre perdas de administradores.")
+    document.add_paragraph("Custos de defesa", style="List Bullet")
+    if with_table:
+        table = document.add_table(rows=2, cols=2)
+        table.cell(0, 0).text = "Cobertura"
+        table.cell(0, 1).text = "Limite"
+        table.cell(1, 0).text = "LMG"
+        table.cell(1, 1).text = "R$ 10.000.000"
+    document.add_page_break()
+    document.add_paragraph("2.1 Exclusões: fraude comprovada.")
+    stream = io.BytesIO()
+    document.save(stream)
+    return stream.getvalue()
