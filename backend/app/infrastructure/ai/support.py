@@ -114,6 +114,7 @@ async def call_with_retries[T](
                     f"Limite de uso do provedor de IA ({provider}) atingido. "
                     "Aguarde um minuto e tente novamente.",
                     code="MODEL_RATE_LIMITED",
+                    details={"retryable": True},
                 ) from exc
             await asyncio.sleep(wait + random.uniform(0.5, 1.5))
             continue
@@ -126,10 +127,12 @@ async def call_with_retries[T](
                     raise InfrastructureError(
                         f"O provedor de IA ({provider}) não respondeu no formato esperado.",
                         code="INVALID_MODEL_OUTPUT",
+                        details={"retryable": True},
                     ) from exc
                 raise InfrastructureError(
                     f"O provedor de IA ({provider}) está indisponível no momento.",
                     code="MODEL_UNAVAILABLE",
+                    details={"retryable": True},
                 ) from exc
             await asyncio.sleep(2 ** (attempt - 1) + random.uniform(0, 0.5))
             continue

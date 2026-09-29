@@ -230,6 +230,7 @@ class QualityCheck(DomainModel):
 class Failure(DomainModel):
     code: str
     message: str
+    retryable: bool = False
 
 
 class Comparison(DomainModel):

@@ -14,11 +14,23 @@ from app.application.use_cases import (
     PolicyService,
     UploadLimits,
 )
-from app.domain.interfaces.ports import BlobStorage, ComparisonRepository, PolicyRepository
+from app.domain.interfaces.ports import (
+    BlobStorage,
+    ComparisonRepository,
+    ConceptAssessor,
+    PolicyExtractor,
+    PolicyRepository,
+    SummaryWriter,
+)
 from app.domain.services.scoring import ScoringParameters
 from app.infrastructure.ai.assessment import GeminiConceptAssessor, GeminiSummaryWriter
 from app.infrastructure.ai.gemini import GeminiPolicyExtractor
 from app.infrastructure.ai.gemini_client import GeminiClient
+from app.infrastructure.ai.local import (
+    LocalConceptAssessor,
+    LocalPolicyExtractor,
+    LocalSummaryWriter,
+)
 from app.infrastructure.events import QueuedEventBus
 from app.infrastructure.knowledge_base import JsonConceptCatalog
 from app.infrastructure.pdf import PypdfTextReader
@@ -89,11 +101,33 @@ def _storage(settings: Settings, firebase: Any) -> BlobStorage:
     return FirebaseBlobStorage(storage.bucket(app=firebase))
 
 
+def _ai_components(
+    settings: Settings,
+) -> tuple[PolicyExtractor, ConceptAssessor, SummaryWriter]:
+    if settings.ai_provider == "local":
+        return LocalPolicyExtractor(), LocalConceptAssessor(), LocalSummaryWriter()
+    gemini = GeminiClient(
+        api_key=settings.gemini_api_key or "",
+        model=settings.gemini_model,
+        timeout_seconds=settings.ai_timeout_seconds,
+        max_attempts=settings.ai_max_attempts,
+        assessment_batch_size=settings.assessment_batch_size,
+    )
+    return (
+        GeminiPolicyExtractor(gemini, settings.extraction_pages_per_call),
+        GeminiConceptAssessor(gemini),
+        GeminiSummaryWriter(gemini),
+    )
+
+
 def build_application(settings: Settings) -> FastAPI:
     missing = settings.missing_required()
     if missing:
         raise ConfigurationError(
-            "Configuração incompleta no backend/.env. Preencha: " + ", ".join(missing)
+            "Configuração incompleta no backend/.env. Preencha: "
+            + ", ".join(missing)
+            + ". Para desenvolvimento sem serviços externos use AI_PROVIDER=local, "
+            "PERSISTENCE_BACKEND=memory e STORAGE_BACKEND=local."
         )
 
     event_bus = QueuedEventBus(workers=settings.worker_concurrency)
@@ -103,18 +137,12 @@ def build_application(settings: Settings) -> FastAPI:
     storage = _storage(settings, firebase)
 
     catalog = JsonConceptCatalog()
-    gemini = GeminiClient(
-        api_key=settings.gemini_api_key or "",
-        model=settings.gemini_model,
-        timeout_seconds=settings.ai_timeout_seconds,
-        max_attempts=settings.ai_max_attempts,
-        assessment_batch_size=settings.assessment_batch_size,
-    )
+    extractor, assessor, summary_writer = _ai_components(settings)
     policy_service = PolicyService(
         repository=policies,
         storage=storage,
         catalog=catalog,
-        extractor=GeminiPolicyExtractor(gemini),
+        extractor=extractor,
         pdf_reader=PypdfTextReader(),
         docx_reader=PythonDocxTextReader(),
         event_bus=event_bus,
@@ -128,8 +156,8 @@ def build_application(settings: Settings) -> FastAPI:
         comparisons=comparisons,
         policies=policies,
         catalog=catalog,
-        assessor=GeminiConceptAssessor(gemini),
-        summary_writer=GeminiSummaryWriter(gemini),
+        assessor=assessor,
+        summary_writer=summary_writer,
         event_bus=event_bus,
         parameters=ScoringParameters(
             profile_multiplier=Decimal(str(settings.profile_multiplier)),
@@ -149,4 +177,15 @@ def build_application(settings: Settings) -> FastAPI:
     return create_app(settings=settings, event_bus=event_bus, services=services)
 
 
-app = build_application(get_settings())
+_application: FastAPI | None = None
+
+
+def __getattr__(name: str) -> FastAPI:
+    """Build `app` on first access, so importing this module needs no configuration."""
+
+    global _application
+    if name != "app":
+        raise AttributeError(name)
+    if _application is None:
+        _application = build_application(get_settings())
+    return _application

@@ -125,6 +125,26 @@ def default_assessment(pair: ConceptPair) -> ConceptAssessment:
     )
 
 
+def unassessed_assessment(pair: ConceptPair) -> ConceptAssessment:
+    """Placeholder when the AI assessment is unavailable: no points, low confidence.
+
+    The pair keeps its documentary status and evidence but never counts as
+    sufficient, so the score is not inflated and the item asks for broker review.
+    """
+
+    def decision() -> AssessmentDecision:
+        return AssessmentDecision(
+            base_result=0,
+            adjustment_factor=0,
+            justification="Avaliação por IA indisponível; pontuação não atribuída.",
+            confidence=Level.LOW,
+        )
+
+    return ConceptAssessment(
+        concept_id=pair.concept.id, a=decision(), b=decision(), main_difference=""
+    )
+
+
 def _side(
     weight: int, occurrence: ConceptOccurrence | None, decision: AssessmentDecision
 ) -> tuple[ComparisonSide, Level]:

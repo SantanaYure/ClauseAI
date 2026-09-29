@@ -99,9 +99,37 @@ def _native_text(page_texts: dict[int, str], file_kind: FileKind) -> str:
     return f"<document{note}>\n" + "\n".join(pages) + "\n</document>"
 
 
+DEFAULT_PAGES_PER_CALL = 30
+
+
+def _page_windows(page_texts: dict[int, str], size: int) -> list[dict[int, str]]:
+    """Consecutive page ranges, so a long document never overflows the output limit."""
+
+    pages = sorted(page_texts)
+    return [{p: page_texts[p] for p in pages[i : i + size]} for i in range(0, len(pages), size)]
+
+
+def _merge_outputs(outputs: list[_ExtractionOut]) -> _ExtractionOut:
+    """Join range results: first non-empty intake field wins; occurrences concatenate.
+
+    Same-concept occurrences from different ranges are merged later, at policy level.
+    """
+
+    intake = outputs[0].intake
+    for other in outputs[1:]:
+        fill = {
+            name: getattr(other.intake, name)
+            for name in _INTAKE_FIELDS
+            if getattr(intake, name) is None and getattr(other.intake, name) is not None
+        }
+        intake = intake.model_copy(update=fill)
+    return _ExtractionOut(intake=intake, occurrences=[o for x in outputs for o in x.occurrences])
+
+
 class GeminiPolicyExtractor:
-    def __init__(self, client: GeminiClient) -> None:
+    def __init__(self, client: GeminiClient, pages_per_call: int = DEFAULT_PAGES_PER_CALL) -> None:
         self._client = client
+        self._pages_per_call = pages_per_call
         self._template = load_prompt(PROMPT_VERSION)
 
     @property
@@ -118,11 +146,11 @@ class GeminiPolicyExtractor:
                 "O texto do DOCX não foi lido.", code="DOCX_WITHOUT_TEXT", status_code=422
             )
         instructions = render(self._template, catalog=_catalog_text(knowledge_base))
-        parts: list[Any] = [instructions]
         if native:
-            parts.append(_native_text(content.page_texts, document.file_kind))
+            windows = _page_windows(content.page_texts, self._pages_per_call)
+            documents: list[Any] = [_native_text(w, document.file_kind) for w in windows]
         else:
-            parts.append(types.Part.from_bytes(data=content.data, mime_type=document.content_type))
+            documents = [types.Part.from_bytes(data=content.data, mime_type=document.content_type)]
 
         def parse(text: str | None) -> _ExtractionOut:
             try:
@@ -130,7 +158,11 @@ class GeminiPolicyExtractor:
             except PydanticValidationError as exc:
                 raise InvalidModelOutput(str(exc)) from exc
 
-        output = await self._client.generate(parts, PROMPT_VERSION, parse)
+        outputs = [
+            await self._client.generate([instructions, part], PROMPT_VERSION, parse)
+            for part in documents
+        ]
+        output = _merge_outputs(outputs)
         return self._to_domain(output, content, knowledge_base, native)
 
     def _to_domain(
