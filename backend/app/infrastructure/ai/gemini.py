@@ -25,6 +25,7 @@ from app.domain.value_objects import (
     OccurrenceType,
     TermRelation,
 )
+from app.shared.exceptions import ApplicationError
 from app.infrastructure.ai.gemini_client import GeminiClient
 from app.infrastructure.ai.support import (
     InvalidModelOutput,
@@ -35,6 +36,7 @@ from app.infrastructure.ai.support import (
 
 PROMPT_VERSION = "P-EXTRACT-001"
 MAX_CATALOG_VARIANTS = 6
+_NATIVE_KINDS = {FileKind.SEARCHABLE_PDF, FileKind.DOCX}
 
 
 class _EvidenceOut(BaseModel):
@@ -83,11 +85,18 @@ def _catalog_text(knowledge_base: KnowledgeBase) -> str:
     return "\n".join(lines)
 
 
-def _native_text(page_texts: dict[int, str]) -> str:
+_DOCX_NOTE = (
+    "Documento Word sem páginas fixas: cada page é um bloco lógico delimitado por quebras "
+    "de página, de seção ou por tamanho. Use o número do bloco como page."
+)
+
+
+def _native_text(page_texts: dict[int, str], file_kind: FileKind) -> str:
     pages = [
         f'<page number="{page}">\n{text}\n</page>' for page, text in sorted(page_texts.items())
     ]
-    return "<document>\n" + "\n".join(pages) + "\n</document>"
+    note = f' format="docx" note="{_DOCX_NOTE}"' if file_kind == FileKind.DOCX else ""
+    return f"<document{note}>\n" + "\n".join(pages) + "\n</document>"
 
 
 class GeminiPolicyExtractor:
@@ -103,11 +112,15 @@ class GeminiPolicyExtractor:
         self, content: DocumentContent, knowledge_base: KnowledgeBase
     ) -> ExtractionResult:
         document = content.document
-        native = document.file_kind == FileKind.SEARCHABLE_PDF and bool(content.page_texts)
+        native = document.file_kind in _NATIVE_KINDS and bool(content.page_texts)
+        if document.file_kind == FileKind.DOCX and not native:
+            raise ApplicationError(
+                "O texto do DOCX não foi lido.", code="DOCX_WITHOUT_TEXT", status_code=422
+            )
         instructions = render(self._template, catalog=_catalog_text(knowledge_base))
         parts: list[Any] = [instructions]
         if native:
-            parts.append(_native_text(content.page_texts))
+            parts.append(_native_text(content.page_texts, document.file_kind))
         else:
             parts.append(types.Part.from_bytes(data=content.data, mime_type=document.content_type))
 

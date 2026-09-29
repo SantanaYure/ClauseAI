@@ -22,6 +22,7 @@ from app.infrastructure.ai.gemini_client import GeminiClient
 from app.infrastructure.events import QueuedEventBus
 from app.infrastructure.knowledge_base import JsonConceptCatalog
 from app.infrastructure.pdf import PypdfTextReader
+from app.infrastructure.word import PythonDocxTextReader
 from app.infrastructure.persistence import (
     InMemoryComparisonRepository,
     InMemoryPolicyRepository,
@@ -115,6 +116,7 @@ def build_application(settings: Settings) -> FastAPI:
         catalog=catalog,
         extractor=GeminiPolicyExtractor(gemini),
         pdf_reader=PypdfTextReader(),
+        docx_reader=PythonDocxTextReader(),
         event_bus=event_bus,
         limits=UploadLimits(
             max_file_bytes=settings.max_upload_mb * 1024 * 1024,

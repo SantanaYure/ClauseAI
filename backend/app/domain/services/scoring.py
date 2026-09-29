@@ -498,7 +498,7 @@ def build_quality_gate(
         return QualityCheck(id=check_id, label=label, passed=passed, detail=detail)
 
     return [
-        check("files", "Todos os PDFs e imagens foram lidos",
+        check("files", "Todos os documentos foram lidos",
               all(d.status == "COMPLETED" for d in documents),
               f"{len(documents)} documento(s) processado(s)."),
         check("ocr", "OCR avaliado quanto à confiança", min_confidence >= params.ocr_min_confidence,

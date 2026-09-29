@@ -84,6 +84,36 @@ class PdfTextReader(Protocol):
     def read(self, data: bytes) -> PdfText: ...
 
 
+class DocumentUnreadableError(Exception):
+    """The file's content cannot be parsed (corrupted or malformed)."""
+
+
+@dataclass(frozen=True, slots=True)
+class DocxText:
+    """Text of a DOCX in document order, grouped into stable logical pages.
+
+    DOCX has no fixed pagination, so a logical page starts at an explicit page
+    break, at a section break or when a block reaches its size cap. The numbers
+    are deterministic for the same file and are 1-based like PDF pages.
+    """
+
+    page_texts: dict[int, str]
+
+    @property
+    def page_count(self) -> int:
+        return len(self.page_texts)
+
+    @property
+    def has_text(self) -> bool:
+        return any(text.strip() for text in self.page_texts.values())
+
+
+class DocxTextReader(Protocol):
+    def read(self, data: bytes) -> DocxText:
+        """Raise `DocumentUnreadableError` when the file cannot be parsed."""
+        ...
+
+
 class PolicyExtractor(Protocol):
     """P-EXTRACT-001 / P-NORMALIZE-001 (Gemini)."""
 

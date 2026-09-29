@@ -32,7 +32,7 @@ async def create_policy(
     services: Services,
     correlation: Correlation,
     settings: Annotated[Settings, Depends(get_settings)],
-    files: Annotated[list[UploadFile], File(description="PDF, JPG ou PNG")],
+    files: Annotated[list[UploadFile], File(description="PDF, DOCX, JPG ou PNG")],
     document_types: Annotated[list[DocumentType], Form()],
     insurer: Annotated[str | None, Form(max_length=120)] = None,
     name: Annotated[str | None, Form(max_length=120)] = None,

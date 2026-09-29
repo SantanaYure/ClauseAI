@@ -64,6 +64,7 @@ class FileKind(StrEnum):
     SEARCHABLE_PDF = "SEARCHABLE_PDF"
     SCANNED_PDF = "SCANNED_PDF"
     IMAGE = "IMAGE"
+    DOCX = "DOCX"
 
 
 class DocumentStatus(StrEnum):
