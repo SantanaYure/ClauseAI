@@ -10,12 +10,10 @@ export type IllustrationName = 'welcome' | 'upload' | 'search' | 'compare' | 'su
 const HIGHLIGHT = 'var(--brand-yellow, #FFD700)';
 
 /** Pessoa estilizada: cabeça, cabelo e tronco em arco. `x` é o centro horizontal. */
-function Person({ x, base = 158, flip = false }: { x: number; base?: number; flip?: boolean }) {
-  const dir = flip ? -1 : 1;
+function Person({ x, base = 158 }: { x: number; base?: number }) {
   return (
     <g>
       <circle cx={x} cy={base - 96} r={14} />
-      <path d={`M${x - 14} ${base - 100} a14 14 0 0 1 ${28} ${-2 * dir + 0}`} />
       <path d={`M${x - 24} ${base} V${base - 46} a24 24 0 0 1 48 0 V${base}`} />
     </g>
   );
@@ -125,7 +123,7 @@ const SCENES: Record<IllustrationName, ReactNode> = {
     <>
       <Ground />
       <Person x={46} />
-      <Person x={194} flip />
+      <Person x={194} />
       <Doc x={66} y={54} w={52} h={70} lines={2} />
       <Doc x={122} y={54} w={52} h={70} lines={2} />
       <path d="M72 100 L50 108" />

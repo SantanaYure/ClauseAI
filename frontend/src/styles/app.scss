@@ -824,7 +824,7 @@ $tones: danger, high, medium, success, muted, info, neutral;
 }
 
 .hero__art {
-  width: min(17rem, 78%);
+  width: min(11rem, 60%);
   margin: 0 auto;
 
   @include desktop {
@@ -1044,7 +1044,7 @@ $tones: danger, high, medium, success, muted, info, neutral;
 .policy-card__actions {
   display: flex;
   flex-wrap: wrap;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: var(--space-2);
 }
 
@@ -1142,7 +1142,6 @@ $tones: danger, high, medium, success, muted, info, neutral;
 .progress-steps__item {
   padding-top: var(--space-2);
   border-top: 6px solid var(--color-surface-strong);
-  border-radius: var(--radius-pill);
   color: var(--color-text-secondary);
 
   &--done {
@@ -1423,7 +1422,7 @@ form.stack:has(> .slot) {
   }
 
   .illustration {
-    width: 6rem;
+    width: 9rem;
     margin-left: auto;
   }
 }
