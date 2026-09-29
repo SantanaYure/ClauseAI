@@ -33,7 +33,7 @@ Status permitido: `Accepted`, `Proposed`, `Superseded`. ADRs registram decisões
 
 - **Status:** Accepted
 - **Contexto/problema:** persistência documental e armazenamento de binários com baixo overhead operacional.
-- **Decisão:** Firestore para metadados/estruturas e Storage para originais.
+- **Decisão:** Firestore para metadados/estruturas e Storage para originais. Atualizado pelo ADR-022: os originais ficam em pasta local por padrão.
 - **Alternativas:** PostgreSQL + object storage; MongoDB.
 - **Consequências:** velocidade de prototipação; necessidade de índices, limites e emuladores.
 - **Riscos:** consultas complexas e consistência entre Storage/Firestore; usar repositories e compensação.
@@ -181,3 +181,21 @@ Status permitido: `Accepted`, `Proposed`, `Superseded`. ADRs registram decisões
 - **Alternativas:** framework multiagente externo; um único prompt monolítico.
 - **Consequências:** atende à sugestão do desafio sem operar processos separados; responsabilidades testáveis isoladamente.
 - **Riscos:** acoplamento entre agentes; comunicação só por eventos e DTOs.
+
+## ADR-021 — Worker em fila e adaptador de persistência em memória
+
+- **Status:** Accepted
+- **Contexto/problema:** o HTTP precisa responder `202` sem esperar o Gemini e o Groq, e os testes automatizados não devem depender do Firebase nem das chaves de IA.
+- **Decisão:** `QueuedEventBus` envolve o `InMemoryEventBus` com uma `asyncio.Queue` e workers iniciados no ciclo de vida do FastAPI (`WORKER_CONCURRENCY`). `PERSISTENCE_BACKEND=memory` troca Firestore/Storage por repositórios em memória e pasta local, sem nenhum dado pré-carregado; o padrão é `firebase`.
+- **Alternativas:** `BackgroundTasks` do FastAPI; fila externa desde o início; Firebase Emulator nos testes.
+- **Consequências:** API responsiva e testes rápidos e determinísticos; o modo memória perde dados ao reiniciar.
+- **Riscos:** evento na fila perdido se o processo cair; o estado é gravado antes de publicar e a comparação pode ser repetida pela UI (Histórico → “Tentar novamente”).
+
+## ADR-022 — Arquivos originais em pasta local por padrão
+
+- **Status:** Accepted (complementa o ADR-004)
+- **Contexto/problema:** projetos novos do Firebase só ativam o Storage no plano Blaze (pago conforme o uso). O MVP acadêmico roda localmente e deve funcionar no plano gratuito Spark.
+- **Decisão:** `STORAGE_BACKEND=local` (padrão) grava os originais em `backend/.data/uploads`, fora do Git; os dados continuam no Firestore. `STORAGE_BACKEND=firebase` reativa o Firebase Storage sem mudar código, pela mesma porta `BlobStorage`.
+- **Alternativas:** exigir o plano Blaze; não guardar os originais.
+- **Consequências:** custo zero e configuração mais simples; os originais existem só na máquina do backend.
+- **Riscos:** perder a pasta impede reprocessar documentos (apólices e comparações continuam no Firestore); para publicar o backend na nuvem é preciso usar `STORAGE_BACKEND=firebase` ou outro armazenamento de objetos.

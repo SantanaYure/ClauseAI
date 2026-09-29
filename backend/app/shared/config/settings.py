@@ -1,14 +1,15 @@
 """Typed application settings loaded from environment variables."""
 
+import json
 from functools import lru_cache
-from typing import Any
+from typing import Annotated, Any, Literal
 
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    """Runtime settings for the API foundation."""
+    """Runtime settings. Secrets come only from the environment (.env is not committed)."""
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -22,15 +23,45 @@ class Settings(BaseSettings):
     app_version: str = "0.1.0"
     api_v1_prefix: str = "/api/v1"
     log_level: str = "INFO"
-    cors_allowed_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173"])
+    cors_allowed_origins: Annotated[list[str], NoDecode] = Field(
+        default_factory=lambda: ["http://localhost:5173"]
+    )
 
+    # Data: "firebase" (Firestore) or "memory" (process-local, for tests).
+    persistence_backend: Literal["firebase", "memory"] = "firebase"
+    # Original files: "local" (folder on the API machine, free) or "firebase" (Storage, Blaze plan).
+    storage_backend: Literal["local", "firebase"] = "local"
+    local_storage_dir: str = ".data/uploads"
+
+    firebase_credentials_path: str | None = None
     firebase_project_id: str | None = None
     firebase_client_email: str | None = None
     firebase_private_key: str | None = None
     firebase_storage_bucket: str | None = None
 
+    # Gemini: extraction and multimodal OCR (ADR-006).
     gemini_api_key: str | None = None
+    gemini_model: str = "gemini-3.5-flash-lite"
+
+    # Groq / GPT-OSS: concept assessment and executive conclusion (ADR-007).
     groq_api_key: str | None = None
+    groq_model: str = "openai/gpt-oss-120b"
+    # Concepts per assessment call; smaller batches fit free-tier tokens-per-minute limits.
+    groq_batch_size: int = Field(default=6, ge=1, le=15)
+    groq_reasoning_effort: Literal["low", "medium", "high"] = "low"
+
+    ai_timeout_seconds: float = 120.0
+    ai_max_attempts: int = Field(default=3, ge=1, le=5)
+
+    max_upload_mb: int = Field(default=20, ge=1, le=100)
+    max_files_per_policy: int = Field(default=10, ge=1, le=30)
+    worker_concurrency: int = Field(default=2, ge=1, le=8)
+
+    # Decision parameters still PENDING_BUSINESS_VALIDATION (knowledge base, section 10).
+    profile_multiplier: float = 1.5
+    close_score_threshold: float = 0.03
+    min_completeness: float = 0.70
+    min_evidence_confidence: float = 0.70
 
     @field_validator("cors_allowed_origins", mode="before")
     @classmethod
@@ -38,8 +69,41 @@ class Settings(BaseSettings):
         if isinstance(value, list):
             return [str(origin).strip() for origin in value if str(origin).strip()]
         if isinstance(value, str):
-            return [origin.strip() for origin in value.split(",") if origin.strip()]
+            stripped = value.strip()
+            if stripped.startswith("["):
+                return [str(origin).strip() for origin in json.loads(stripped)]
+            return [origin.strip() for origin in stripped.split(",") if origin.strip()]
         return []
+
+    @field_validator("firebase_private_key", mode="after")
+    @classmethod
+    def restore_newlines(cls, value: str | None) -> str | None:
+        return value.replace("\\n", "\n") if value else value
+
+    def missing_required(self) -> list[str]:
+        """Names of the variables the configured runtime still needs."""
+
+        missing = [
+            name
+            for name, value in (
+                ("GEMINI_API_KEY", self.gemini_api_key),
+                ("GROQ_API_KEY", self.groq_api_key),
+            )
+            if not value
+        ]
+        if self.storage_backend == "firebase" and not self.firebase_storage_bucket:
+            missing.append("FIREBASE_STORAGE_BUCKET")
+        if "firebase" in (self.persistence_backend, self.storage_backend):
+            has_file = bool(self.firebase_credentials_path)
+            has_fields = all(
+                (self.firebase_project_id, self.firebase_client_email, self.firebase_private_key)
+            )
+            if not (has_file or has_fields):
+                missing.append(
+                    "FIREBASE_CREDENTIALS_PATH (ou FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL "
+                    "e FIREBASE_PRIVATE_KEY)"
+                )
+        return missing
 
 
 @lru_cache(maxsize=1)

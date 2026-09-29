@@ -7,6 +7,7 @@ import { SearchField } from '../../components/SearchField';
 import { EmptyState, ErrorState, LoadingState } from '../../components/StateViews';
 import { clauseApi } from '../../services/api/clause-api';
 import { normalizeText } from '../../shared/text';
+import { hasBusyPolicy, PROCESSING_POLL_MS } from '../../shared/processing';
 import { useApiData } from '../../shared/useApiData';
 import type { PolicyStatus, PolicySummary } from '../../types/domain';
 import { PolicyCard } from './PolicyCard';
@@ -36,7 +37,10 @@ function matches(policy: PolicySummary, filter: Filter, query: string): boolean 
 }
 
 export function PoliciesPage() {
-  const state = useApiData('policies', () => clauseApi.listPolicies());
+  const state = useApiData('policies', () => clauseApi.listPolicies(), {
+    pollMs: PROCESSING_POLL_MS,
+    shouldPoll: hasBusyPolicy,
+  });
   const [filter, setFilter] = useState<Filter>('ALL');
   const [query, setQuery] = useState('');
 

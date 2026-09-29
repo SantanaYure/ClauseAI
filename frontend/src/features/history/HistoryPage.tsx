@@ -8,6 +8,7 @@ import { EmptyState, ErrorState, LoadingState } from '../../components/StateView
 import { clauseApi } from '../../services/api/clause-api';
 import { formatDateTime, formatPercent } from '../../shared/format';
 import { DECISION_MODE_LABELS, POLICY_SLOT_LABELS } from '../../shared/labels';
+import { hasBusyComparison, isComparisonBusy, PROCESSING_POLL_MS } from '../../shared/processing';
 import { useApiData } from '../../shared/useApiData';
 import type { ComparisonListItem } from '../../types/domain';
 
@@ -27,7 +28,10 @@ function matchesFilter(item: ComparisonListItem, filter: Filter): boolean {
 }
 
 export function HistoryPage() {
-  const state = useApiData('comparisons', () => clauseApi.listComparisons());
+  const state = useApiData('comparisons', () => clauseApi.listComparisons(), {
+    pollMs: PROCESSING_POLL_MS,
+    shouldPoll: hasBusyComparison,
+  });
   const [filter, setFilter] = useState<Filter>('ALL');
 
   return (
@@ -120,6 +124,10 @@ function HistoryCard({ item }: { item: ComparisonListItem }) {
         {failed ? (
           <Badge tone="danger" icon="alert">
             Falhou
+          </Badge>
+        ) : isComparisonBusy(item.status) ? (
+          <Badge tone="info" busy>
+            Em processamento
           </Badge>
         ) : (
           item.decisionMode && (

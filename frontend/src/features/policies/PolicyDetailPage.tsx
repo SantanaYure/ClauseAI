@@ -6,6 +6,7 @@ import { EvidenceQuote } from '../../components/EvidenceQuote';
 import { FilterChips } from '../../components/FilterChips';
 import { Icon } from '../../components/Icon';
 import { PageHeader } from '../../components/PageHeader';
+import { Spinner } from '../../components/Spinner';
 import { EmptyState, ErrorState, LoadingState } from '../../components/StateViews';
 import { COMPARABLE_POLICY_STATUSES, clauseApi } from '../../services/api/clause-api';
 import {
@@ -17,6 +18,12 @@ import {
   LEVEL_LABELS,
   POLICY_STATUS_LABELS,
 } from '../../shared/labels';
+import {
+  describeProcessing,
+  isDocumentBusy,
+  isPolicyBusy,
+  PROCESSING_POLL_MS,
+} from '../../shared/processing';
 import { contractTone, documentStatusTone, policyStatusTone } from '../../shared/tones';
 import { useApiData } from '../../shared/useApiData';
 import type { Concept, ConceptOccurrence, ContractStatus, PolicyDetail } from '../../types/domain';
@@ -32,8 +39,13 @@ const FILTERS: { value: Filter; label: string }[] = [
 ];
 
 export function PolicyDetailPage({ policyId }: { policyId: string }) {
-  const state = useApiData(`policy:${policyId}`, () =>
-    Promise.all([clauseApi.getPolicy(policyId), clauseApi.listConcepts()]),
+  const state = useApiData(
+    `policy:${policyId}`,
+    () => Promise.all([clauseApi.getPolicy(policyId), clauseApi.listConcepts()]),
+    {
+      pollMs: PROCESSING_POLL_MS,
+      shouldPoll: ([policy]) => isPolicyBusy(policy.status),
+    },
   );
   const back = { href: paths.policies, label: 'Apólices' };
 
@@ -76,11 +88,21 @@ function PolicyDetailView({ policy, concepts, back }: ViewProps) {
         subtitle={policy.name}
         back={back}
         action={
-          <Badge tone={policyStatusTone(policy.status)}>
+          <Badge tone={policyStatusTone(policy.status)} busy={isPolicyBusy(policy.status)}>
             {POLICY_STATUS_LABELS[policy.status]}
           </Badge>
         }
       />
+
+      {isPolicyBusy(policy.status) && (
+        <p className="processing-note processing-note--block" role="status">
+          <Spinner />
+          <span>
+            <strong>Processando esta apólice.</strong>
+            {describeProcessing(policy.documents)} A página se atualiza sozinha.
+          </span>
+        </p>
+      )}
 
       <dl className="facts card">
         <div>
@@ -124,7 +146,10 @@ function PolicyDetailView({ policy, concepts, back }: ViewProps) {
               <div className="doc-card__header">
                 <Icon name="file" size={20} />
                 <strong className="doc-card__name">{document.filename}</strong>
-                <Badge tone={documentStatusTone(document.status)}>
+                <Badge
+                  tone={documentStatusTone(document.status)}
+                  busy={isDocumentBusy(document.status)}
+                >
                   {DOCUMENT_STATUS_LABELS[document.status]}
                 </Badge>
               </div>
@@ -149,11 +174,7 @@ function PolicyDetailView({ policy, concepts, back }: ViewProps) {
           Evidências por conceito
         </h2>
         {policy.status === 'PROCESSING' ? (
-          <EmptyState
-            icon="refresh"
-            title="Extração em andamento"
-            text="As evidências aparecem aqui quando o processamento terminar."
-          />
+          <LoadingState label="Extração em andamento. As evidências aparecem aqui quando o processamento terminar." />
         ) : (
           <>
             <FilterChips

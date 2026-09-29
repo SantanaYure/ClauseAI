@@ -13,6 +13,7 @@ import {
   PROFILE_LABELS,
 } from '../../shared/labels';
 import { policyStatusTone } from '../../shared/tones';
+import { hasBusyPolicy, PROCESSING_POLL_MS } from '../../shared/processing';
 import { useApiData } from '../../shared/useApiData';
 import type { PolicySummary, RiskProfile } from '../../types/domain';
 import { PROFILE_DESCRIPTIONS, PROFILE_ORDER } from './profiles';
@@ -23,7 +24,10 @@ type ComparePageProps = {
 };
 
 export function ComparePage({ initialA, initialB }: ComparePageProps) {
-  const state = useApiData('policies', () => clauseApi.listPolicies());
+  const state = useApiData('policies', () => clauseApi.listPolicies(), {
+    pollMs: PROCESSING_POLL_MS,
+    shouldPoll: hasBusyPolicy,
+  });
 
   return (
     <div className="page">

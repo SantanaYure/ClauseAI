@@ -2,9 +2,11 @@ import { paths } from '../../app/router';
 import { Badge } from '../../components/Badge';
 import { BrokerNotice } from '../../components/BrokerNotice';
 import { Icon } from '../../components/Icon';
+import { Spinner } from '../../components/Spinner';
 import { ErrorState, LoadingState } from '../../components/StateViews';
 import { clauseApi } from '../../services/api/clause-api';
 import { DOCUMENT_STATUS_LABELS, DOCUMENT_TYPE_LABELS } from '../../shared/labels';
+import { describeProcessing, isDocumentBusy } from '../../shared/processing';
 import { documentStatusTone } from '../../shared/tones';
 import { useApiData } from '../../shared/useApiData';
 import type { DocumentStatus } from '../../types/domain';
@@ -29,10 +31,23 @@ export function ProcessingProgress({ policyId }: { policyId: string }) {
 
   return (
     <div className="stack">
-      <p className="muted-text" role="status" aria-live="polite">
-        {done
-          ? 'Processamento concluído.'
-          : 'Você pode sair desta tela: o processamento continua e o status aparece em Apólices.'}
+      <p className="processing-note processing-note--block" role="status" aria-live="polite">
+        {done ? (
+          <>
+            <Icon name="checkCircle" size={20} />
+            <span>
+              <strong>Processamento concluído.</strong>
+            </span>
+          </>
+        ) : (
+          <>
+            <Spinner />
+            <span>
+              <strong>{describeProcessing(policy.documents)}</strong>
+              Você pode sair desta tela: o processamento continua e o status aparece em Apólices.
+            </span>
+          </>
+        )}
       </p>
       <ul className="stack">
         {policy.documents.map((document) => {
@@ -45,7 +60,10 @@ export function ProcessingProgress({ policyId }: { policyId: string }) {
                   {document.filename}
                   <small>{DOCUMENT_TYPE_LABELS[document.type]}</small>
                 </strong>
-                <Badge tone={documentStatusTone(document.status)}>
+                <Badge
+                  tone={documentStatusTone(document.status)}
+                  busy={isDocumentBusy(document.status)}
+                >
                   {DOCUMENT_STATUS_LABELS[document.status]}
                 </Badge>
               </div>

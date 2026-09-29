@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { Icon, type IconName } from './Icon';
+import { Spinner } from './Spinner';
 
 /**
  * Tons da base de conhecimento (seção 8): danger = diferença crítica/exclusão/ausência relevante,
@@ -13,12 +14,14 @@ type BadgeProps = {
   tone: Tone;
   children: ReactNode;
   icon?: IconName;
+  /** Mostra um indicador animado no lugar do ícone: há uma ação em andamento. */
+  busy?: boolean;
 };
 
-export function Badge({ tone, children, icon }: BadgeProps) {
+export function Badge({ tone, children, icon, busy = false }: BadgeProps) {
   return (
     <span className={`badge badge--${tone}`}>
-      {icon && <Icon name={icon} size={14} />}
+      {busy ? <Spinner size="sm" /> : icon && <Icon name={icon} size={14} />}
       {children}
     </span>
   );

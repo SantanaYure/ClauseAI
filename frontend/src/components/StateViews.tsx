@@ -1,10 +1,11 @@
 import type { ReactNode } from 'react';
 import { Icon, type IconName } from './Icon';
+import { Spinner } from './Spinner';
 
 export function LoadingState({ label = 'Carregando…' }: { label?: string }) {
   return (
     <div className="state-view" role="status" aria-live="polite">
-      <span className="spinner" aria-hidden="true" />
+      <Spinner />
       <p>{label}</p>
     </div>
   );

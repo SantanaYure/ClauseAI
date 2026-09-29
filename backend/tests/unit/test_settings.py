@@ -19,3 +19,35 @@ def test_settings_have_safe_defaults() -> None:
     assert settings.app_env == "development"
     assert settings.firebase_project_id is None
     assert settings.gemini_api_key is None
+
+
+def test_local_storage_does_not_require_firebase_bucket() -> None:
+    settings = Settings(
+        _env_file=None,
+        gemini_api_key="g",
+        groq_api_key="q",
+        firebase_credentials_path="conta.json",
+    )
+
+    assert settings.storage_backend == "local"
+    assert settings.missing_required() == []
+
+
+def test_firebase_storage_requires_bucket() -> None:
+    settings = Settings(
+        _env_file=None,
+        gemini_api_key="g",
+        groq_api_key="q",
+        firebase_credentials_path="conta.json",
+        storage_backend="firebase",
+    )
+
+    assert settings.missing_required() == ["FIREBASE_STORAGE_BUCKET"]
+
+
+def test_memory_mode_needs_no_firebase_credentials() -> None:
+    settings = Settings(
+        _env_file=None, gemini_api_key="g", groq_api_key="q", persistence_backend="memory"
+    )
+
+    assert settings.missing_required() == []

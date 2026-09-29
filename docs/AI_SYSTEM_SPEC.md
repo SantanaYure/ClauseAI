@@ -211,6 +211,8 @@ Retorne somente JSON válido conforme schema_version=1.
 - **Regras:** datas válidas, dinheiro sem perda, confidence no intervalo, page positiva, campos desconhecidos preservados em `additional_fields` ou rejeitados conforme schema.
 - **Limite:** não corrigir conteúdo com conhecimento externo.
 
+> **Implementação atual:** recebimento, extração e normalização rodam numa única chamada ao Gemini (`P-EXTRACT-001` em `backend/app/infrastructure/ai/prompts/`), para reduzir custo e latência. PDFs pesquisáveis são enviados como texto nativo por página; PDFs digitalizados e imagens vão como arquivo para OCR multimodal. Depois da resposta, o backend aplica travas determinísticas: IDs fora do catálogo são descartados, menção em documento que não seja apólice, especificação ou endosso vira `NOT_PROVEN`, classificação sem trecho literal vira `NOT_PROVEN` e trecho não encontrado no texto nativo tem a confiança reduzida.
+
 ### P-NORMALIZE-001 — organização e normalização
 
 - **Objetivo:** vincular cada evidência a conceitos do catálogo (documento 3, prompt 4).
@@ -232,7 +234,11 @@ Retorne somente JSON válido conforme schema_version=1.
 - **Saída:** estrutura `ExecutiveSummary` do modelo de domínio.
 - **Regras:** não escolher apólice só pelo percentual; declarar `CONDITIONED` quando a completude for baixa ou a decisão depender de conceito crítico inconclusivo.
 
+> **Implementação atual do Groq:** `P-ASSESS-001` avalia em lotes de 8 conceitos; o backend ajusta cada valor à escala permitida, limita `NOT_PROVEN` a 0,25 e `DIVERGENT` a 0,50, zera exclusões e ausências e exige justificativa para reduções. `P-EXECUTIVE-001` reescreve só a conclusão; se ela citar um percentual que não foi calculado, o texto determinístico é mantido. Os modelos são configuráveis em `GEMINI_MODEL` e `GROQ_MODEL`.
+
 ### P-QUERY-001 — consulta
+
+> **Implementação atual:** a resolução do conceito (variantes e sobreposição de palavras) e a busca das evidências são determinísticas; a resposta é montada sem LLM. Redigir a resposta com o Groq fica como evolução.
 
 - **Objetivo:** responder consultas do usuário sobre a base (documento 3, prompt 6).
 - **Entrada:** pergunta e registros recuperados por filtros determinísticos.

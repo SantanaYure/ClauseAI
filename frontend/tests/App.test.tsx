@@ -57,6 +57,50 @@ describe('App', () => {
     expect(await screen.findByText('Nenhuma apólice encontrada')).toBeInTheDocument();
   });
 
+  it('shows a loading indicator while a policy is processing', async () => {
+    const policy = (status: string, documentStatus: string) => ({
+      items: [
+        {
+          id: 'pol_1',
+          insurer: 'Seguradora Teste',
+          name: 'D&O',
+          number: null,
+          validity: null,
+          status,
+          alerts: [],
+          documents: [
+            {
+              id: 'doc_1',
+              filename: 'apolice.pdf',
+              type: 'POLICY',
+              file_kind: 'SEARCHABLE_PDF',
+              pages: 3,
+              status: documentStatus,
+              extraction_quality: null,
+              ocr_required: false,
+              failure: null,
+            },
+          ],
+        },
+      ],
+      next_cursor: null,
+    });
+    mockApi([{ match: '/api/v1/policies', body: policy('PROCESSING', 'EXTRACTING') }]);
+    await openRoute('#/apolices');
+
+    expect(
+      await screen.findByText('Lendo os documentos e extraindo as evidências…'),
+    ).toBeInTheDocument();
+    expect(document.querySelectorAll('.spinner').length).toBeGreaterThan(0);
+
+    mockApi([{ match: '/api/v1/policies', body: policy('READY', 'COMPLETED') }]);
+    expect(
+      await screen.findByText('Pronta para comparar', {}, { timeout: 5000 }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Lendo os documentos e extraindo as evidências…')).toBeNull();
+    expect(document.querySelectorAll('.spinner')).toHaveLength(0);
+  }, 10000);
+
   it('shows a retryable error when the API is unreachable', async () => {
     mockApi([]);
     await openRoute('#/apolices');

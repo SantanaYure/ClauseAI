@@ -72,15 +72,14 @@ export type PolicyDocument = {
   ocrRequired: boolean;
 };
 
-export type LimitBasis = 'AGGREGATE' | 'PER_CLAIM_AND_AGGREGATE';
+export type LimitBasis = 'AGGREGATE' | 'PER_CLAIM' | 'PER_CLAIM_AND_AGGREGATE';
 
+// Ocorrência extraída; Resultado-base e Fator de Ajuste só existem na comparação.
 export type ConceptOccurrence = {
   conceptId: ConceptId;
   term: string;
   contractStatus: ContractStatus;
-  baseResult: number;
-  adjustmentFactor: number;
-  justification?: string;
+  justification?: string | null;
   evidence: Evidence[];
   confidence: Level;
   limitBasis?: LimitBasis;

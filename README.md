@@ -10,14 +10,15 @@ As regras de negócio estão em [`docs/domain/DO_KNOWLEDGE_BASE.md`](docs/domain
 
 ## Visão geral
 
-O repositório contém um frontend React/TypeScript/SCSS e um backend Python/FastAPI organizados como monólito modular. Nesta etapa existe somente a base executável: health check, configuração, logging, tratamento de erros, contratos do Event Bus e testes. Upload, Firebase, IA, extração e comparação permanecem para etapas posteriores.
+O repositório contém um frontend React/TypeScript/SCSS e um backend Python/FastAPI organizados como monólito modular. O fluxo completo — envio, extração, organização, armazenamento, consulta, comparação e apresentação — está implementado; o que falta configurar são as credenciais em `backend/.env`.
 
 ## Stack
 
 - Frontend: React, TypeScript, Vite e SCSS.
 - Backend: Python, FastAPI e Uvicorn.
 - Qualidade: Ruff, Ruff Formatter, mypy, pytest, ESLint, Prettier e Vitest.
-- Integrações planejadas: Firebase/Firestore/Storage, Gemini 3.5 Flash Lite (extração e OCR multimodal) e GPT-OSS-120B via Groq (avaliação e resumo).
+- Integrações: Firebase Firestore (arquivos originais em pasta local ou, opcionalmente, no Firebase Storage), Gemini 3.5 Flash Lite (extração e OCR multimodal) e GPT-OSS via Groq (avaliação e resumo).
+- Automações: Python (`backend/scripts/`).
 
 ## Requisitos
 
@@ -97,13 +98,17 @@ npm run build
 
 ## Configuração
 
-Nunca use credenciais reais no repositório. Consulte `backend/.env.example` e `frontend/.env.example`. Firebase e providers de IA aparecem apenas como placeholders nesta fase.
+Nunca use credenciais reais no repositório: o `.env` é ignorado pelo Git. Preencha `backend/.env` (chaves do Gemini, do Groq e do Firebase; veja a tabela em [`backend/README.md`](backend/README.md)) e, se necessário, `frontend/.env`. Sem as variáveis obrigatórias o backend não sobe e lista o que falta.
 
 ## Escopo atual
 
-Implementado: bootstrap executável, `GET /health`, CORS configurável, correlação, erros padronizados, logging estruturado, `InMemoryEventBus`, configuração tipada e testes básicos.
+Implementado:
 
-Não implementado: upload, persistência real, extração, normalização, comparação ponderada, autenticação e filas externas. A sequência está em [`docs/ROADMAP.md`](docs/ROADMAP.md).
+- **Frontend:** cinco telas navegáveis e mobile first (Início, Apólices, Comparar, Conceitos, Histórico), ligadas à API.
+- **Backend:** upload de apólices com vários documentos, processamento assíncrono, extração com Gemini (texto nativo ou OCR multimodal), normalização pelo catálogo D&O, comparação com avaliação por Groq, pontuação ponderada, perfis de risco, resumo executivo, checklist de qualidade e consulta por conceito.
+- Persistência em Firestore e arquivos em pasta local (Firebase Storage opcional), logs estruturados com correlação e testes automatizados.
+
+Não implementado: autenticação, fila durável e endpoints `/documents` isolados. A sequência está em [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ## Integrantes
 

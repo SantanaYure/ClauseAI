@@ -1,12 +1,14 @@
 import { paths } from '../../app/router';
 import { Badge } from '../../components/Badge';
 import { Icon } from '../../components/Icon';
+import { Spinner } from '../../components/Spinner';
 import { COMPARABLE_POLICY_STATUSES } from '../../services/api/clause-api';
 import {
   DOCUMENT_STATUS_LABELS,
   DOCUMENT_TYPE_LABELS,
   POLICY_STATUS_LABELS,
 } from '../../shared/labels';
+import { describeProcessing, isDocumentBusy, isPolicyBusy } from '../../shared/processing';
 import { documentStatusTone, policyStatusTone } from '../../shared/tones';
 import type { PolicySummary } from '../../types/domain';
 
@@ -28,10 +30,7 @@ export function PolicyCard({ policy }: PolicyCardProps) {
             {policy.number ? ` · nº ${policy.number}` : ''}
           </p>
         </div>
-        <Badge
-          tone={policyStatusTone(policy.status)}
-          icon={policy.status === 'PROCESSING' ? 'refresh' : undefined}
-        >
+        <Badge tone={policyStatusTone(policy.status)} busy={isPolicyBusy(policy.status)}>
           {POLICY_STATUS_LABELS[policy.status]}
         </Badge>
       </div>
@@ -47,12 +46,22 @@ export function PolicyCard({ policy }: PolicyCardProps) {
                 {document.pages ? ` · ${document.pages} p.` : ''}
               </small>
             </span>
-            <Badge tone={documentStatusTone(document.status)}>
+            <Badge
+              tone={documentStatusTone(document.status)}
+              busy={isDocumentBusy(document.status)}
+            >
               {DOCUMENT_STATUS_LABELS[document.status]}
             </Badge>
           </li>
         ))}
       </ul>
+
+      {isPolicyBusy(policy.status) && (
+        <p className="processing-note" role="status">
+          <Spinner size="sm" />
+          {describeProcessing(policy.documents)}
+        </p>
+      )}
 
       {policy.alerts.length > 0 && (
         <p className="inline-alert">

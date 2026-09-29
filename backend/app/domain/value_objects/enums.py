@@ -1,0 +1,143 @@
+"""Controlled vocabularies from docs/domain/DO_KNOWLEDGE_BASE.md (section 4)."""
+
+from enum import StrEnum
+
+
+class Importance(StrEnum):
+    CRITICAL = "CRITICAL"
+    HIGH = "HIGH"
+    MEDIUM = "MEDIUM"
+    LOW = "LOW"
+    UNWEIGHTED = "UNWEIGHTED"
+
+
+class ContractStatus(StrEnum):
+    CONTRACTED = "CONTRACTED"
+    NOT_PROVEN = "NOT_PROVEN"
+    NOT_FOUND = "NOT_FOUND"
+    EXCLUDED = "EXCLUDED"
+    DIVERGENT = "DIVERGENT"
+
+
+class OccurrenceType(StrEnum):
+    DEFINITION = "DEFINITION"
+    BASIC_COVERAGE = "BASIC_COVERAGE"
+    ADDITIONAL_COVERAGE = "ADDITIONAL_COVERAGE"
+    EXTENSION = "EXTENSION"
+    EXCLUSION = "EXCLUSION"
+    CONDITION = "CONDITION"
+    OBLIGATION = "OBLIGATION"
+    PROCEDURE = "PROCEDURE"
+    LIMIT = "LIMIT"
+    TERM = "TERM"
+    REFERENCE = "REFERENCE"
+
+
+class TermRelation(StrEnum):
+    EXACT_MATCH = "EXACT_MATCH"
+    LEXICAL_VARIANT = "LEXICAL_VARIANT"
+    ABBREVIATION = "ABBREVIATION"
+    THEMATIC_MATCH = "THEMATIC_MATCH"
+    POSSIBLE_EQUIVALENCE = "POSSIBLE_EQUIVALENCE"
+    RELATED_BUT_DISTINCT = "RELATED_BUT_DISTINCT"
+    UNRELATED = "UNRELATED"
+
+
+class DocumentType(StrEnum):
+    POLICY = "POLICY"
+    GENERAL_CONDITIONS = "GENERAL_CONDITIONS"
+    SPECIAL_CONDITIONS = "SPECIAL_CONDITIONS"
+    PARTICULAR_CONDITIONS = "PARTICULAR_CONDITIONS"
+    ENDORSEMENT = "ENDORSEMENT"
+    SPECIFICATION = "SPECIFICATION"
+    PROPOSAL = "PROPOSAL"
+    OTHER = "OTHER"
+
+
+# Only these documents can prove that a coverage is contracted (knowledge base, 4.5).
+CONTRACTUAL_DOCUMENT_TYPES = frozenset(
+    {DocumentType.POLICY, DocumentType.SPECIFICATION, DocumentType.ENDORSEMENT}
+)
+
+
+class FileKind(StrEnum):
+    SEARCHABLE_PDF = "SEARCHABLE_PDF"
+    SCANNED_PDF = "SCANNED_PDF"
+    IMAGE = "IMAGE"
+
+
+class DocumentStatus(StrEnum):
+    UPLOADED = "UPLOADED"
+    PROCESSING = "PROCESSING"
+    EXTRACTING = "EXTRACTING"
+    VALIDATING = "VALIDATING"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+
+
+class PolicyStatus(StrEnum):
+    PROCESSING = "PROCESSING"
+    READY = "READY"
+    ATTENTION = "ATTENTION"
+    FAILED = "FAILED"
+
+
+COMPARABLE_POLICY_STATUSES = frozenset({PolicyStatus.READY, PolicyStatus.ATTENTION})
+
+
+class ExtractionMethod(StrEnum):
+    NATIVE = "NATIVE"
+    OCR = "OCR"
+    MULTIMODAL = "MULTIMODAL"
+
+
+class Level(StrEnum):
+    HIGH = "HIGH"
+    MEDIUM = "MEDIUM"
+    LOW = "LOW"
+
+
+class LimitBasis(StrEnum):
+    AGGREGATE = "AGGREGATE"
+    PER_CLAIM = "PER_CLAIM"
+    PER_CLAIM_AND_AGGREGATE = "PER_CLAIM_AND_AGGREGATE"
+
+
+class Verdict(StrEnum):
+    FAVORS_A = "FAVORS_A"
+    FAVORS_B = "FAVORS_B"
+    EQUIVALENT = "EQUIVALENT"
+    EQUIVALENT_BOTH_EXCLUDED = "EQUIVALENT_BOTH_EXCLUDED"
+    INCONCLUSIVE = "INCONCLUSIVE"
+
+
+class RiskProfile(StrEnum):
+    BASE = "BASE"
+    FINANCIAL = "FINANCIAL"
+    INTERNATIONAL = "INTERNATIONAL"
+    REGULATORY = "REGULATORY"
+    TAIL = "TAIL"
+    LABOR_REPUTATIONAL = "LABOR_REPUTATIONAL"
+
+
+class DecisionMode(StrEnum):
+    TECHNICAL = "TECHNICAL"
+    CONDITIONED = "CONDITIONED"
+
+
+class ComparisonStatus(StrEnum):
+    REQUESTED = "REQUESTED"
+    DETERMINISTIC_COMPLETED = "DETERMINISTIC_COMPLETED"
+    ASSESSING = "ASSESSING"
+    SCORED = "SCORED"
+    SUMMARIZING = "SUMMARIZING"
+    COMPLETED = "COMPLETED"
+    PARTIAL = "PARTIAL"
+    FAILED = "FAILED"
+
+
+FINAL_COMPARISON_STATUSES = frozenset(
+    {ComparisonStatus.COMPLETED, ComparisonStatus.PARTIAL, ComparisonStatus.FAILED}
+)
+
+BROKER_GUIDANCE = "Consulte seu corretor de seguros."

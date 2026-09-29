@@ -1,0 +1,846 @@
+{
+  "version": "2026.09.1",
+  "concepts": [
+    {
+      "id": "DO-001",
+      "domain": "Partes",
+      "name": "Segurado",
+      "variants": [
+        "Segurado",
+        "cobertura segurado"
+      ],
+      "criterion": "Comparar cargos, poderes, profissionais internos e extensões a terceiros.",
+      "human_review": "RECOMMENDED",
+      "pending_validation": false,
+      "model_question": "Qual é o tratamento de “Segurado” em cada fonte?",
+      "extraction_rule": "Extrair trecho literal, fonte, cláusula, página e status de contratação.",
+      "weight": null,
+      "importance": "UNWEIGHTED",
+      "justification": null,
+      "related": []
+    },
+    {
+      "id": "DO-002",
+      "domain": "Coberturas básicas",
+      "name": "Garantia A",
+      "variants": [
+        "Garantia A",
+        "Cobertura A – Indenização ou reembolso em nome dos administradores (Garantia A)",
+        "Cobertura A - Indenização ou Reembolso em nome dos Administradores",
+        "cobertura cobertura a - indenização ou reembolso em nome dos administradores"
+      ],
+      "criterion": "Equivalência funcional; validar gatilhos e condições.",
+      "human_review": "REQUIRED",
+      "pending_validation": false,
+      "model_question": "Qual é o tratamento de “Cobertura A - Indenização ou Reembolso em nome dos Administradores.” em cada fonte?",
+      "extraction_rule": "Extrair trecho literal, fonte, cláusula, página e status de contratação.",
+      "weight": 10,
+      "importance": "CRITICAL",
+      "justification": "Proteção patrimonial direta do administrador.",
+      "related": []
+    },
+    {
+      "id": "DO-003",
+      "domain": "Coberturas básicas",
+      "name": "Garantia B",
+      "variants": [
+        "Garantia B",
+        "Cobertura B – Reembolso à Sociedade (Garantia B)",
+        "Cobertura B - Reembolso à Sociedade",
+        "cobertura cobertura b - reembolso à sociedade"
+      ],
+      "criterion": "Equivalência funcional; validar definição de Tomador e Sociedade.",
+      "human_review": "REQUIRED",
+      "pending_validation": false,
+      "model_question": "Qual é o tratamento de “Cobertura B - Reembolso à Sociedade.” em cada fonte?",
+      "extraction_rule": "Extrair trecho literal, fonte, cláusula, página e status de contratação.",
+      "weight": 10,
+      "importance": "CRITICAL",
+      "justification": "Reembolso à sociedade quando esta indeniza o administrador.",
+      "related": []
+    },
+    {
+      "id": "DO-004",
+      "domain": "Coberturas adicionais",
+      "name": "Cobertura C – Cobertura à Sociedade (valores mobiliários, CVM)",
+      "variants": [
+        "Cobertura C – Cobertura à Sociedade (valores mobiliários, CVM)",
+        "Cobertura C - Cobertura à Sociedade (Valores Mobiliários, CVM)",
+        "cobertura cobertura c - cobertura à sociedade (valores mobiliários, cvm)"
+      ],
+      "criterion": "AKAD apresenta extensão específica; KOVR não apresenta previsão no material.",
+      "human_review": "REQUIRED",
+      "pending_validation": false,
+      "model_question": "Qual é o tratamento de “Cobertura C - Cobertura à Sociedade (Valores Mobiliários, CVM).” em cada fonte?",
+      "extraction_rule": "Extrair trecho literal, fonte, cláusula, página e status de contratação.",
+      "weight": null,
+      "importance": "UNWEIGHTED",
+      "justification": null,
+      "related": []
+    },
+    {
+      "id": "DO-005",
+      "domain": "Defesa",
+      "name": "Custos de Defesa",
+      "variants": [
+        "Custos de Defesa",
+        "Adiantamento de custos de defesa",
+        "cobertura adiantamento de custos de defesa"
+      ],
+      "criterion": "Comparar momento do adiantamento e condicionantes.",
+      "human_review": "RECOMMENDED",
+      "pending_validation": false,
+      "model_question": "Qual é o tratamento de “Adiantamento de custos de defesa” em cada fonte?",
+      "extraction_rule": "Extrair trecho literal, fonte, cláusula, página e status de contratação.",
+      "weight": 10,
+      "importance": "CRITICAL",
+      "justification": "Cobertura central e frequentemente acionada em D&O.",
+      "related": [
+        "DO-006"
+      ]
+    },
+    {
+      "id": "DO-006",
+      "domain": "Defesa patrimonial",
+      "name": "Custo de defesa – bens e liberdade",
+      "variants": [
+        "Custo de defesa – bens e liberdade",
+        "Custo de defesa - bens e liberdade",
+        "cobertura custo de defesa - bens e liberdade"
+      ],
+      "criterion": "Não tratar como cobertura idêntica sem conferir limites e gatilhos.",
+      "human_review": "RECOMMENDED",
+      "pending_validation": false,
+      "model_question": "Qual é o tratamento de “Custo de defesa - bens e liberdade” em cada fonte?",
+      "extraction_rule": "Extrair trecho literal, fonte, cláusula, página e status de contratação.",
+      "weight": null,
+      "importance": "UNWEIGHTED",
+      "justification": null,
+      "related": [
+        "DO-005"
+      ]
+    },
+    {
+      "id": "DO-007",
+      "domain": "Defesa patrimonial",
+      "name": "Bloqueio de Conta Corrente",
+      "variants": [
+        "Bloqueio de Conta Corrente",
+        "Bloqueio e indisponibilidade de bens / penhora on-line",
+        "cobertura bloqueio e indisponibilidade de bens / penhora on-line"
+      ],
+      "criterion": "AKAD referencia duas cláusulas; KOVR descreve extensão contratada.",
+      "human_review": "RECOMMENDED",
+      "pending_validation": false,
+      "model_question": "Qual é o tratamento de “Bloqueio e indisponibilidade de bens / penhora on-line” em cada fonte?",
+      "extraction_rule": "Extrair trecho literal, fonte, cláusula, página e status de contratação.",
+      "weight": 4,
+      "importance": "MEDIUM",
+      "justification": "Suporte financeiro durante constrição judicial.",
+      "related": []
+    },
+    {
+      "id": "DO-008",
+      "domain": "Investigação",
+      "name": "Investigação",
+      "variants": [
+        "Investigação",
+        "Custos de investigação",
+        "cobertura custos de investigação"
+      ],
+      "criterion": "Diferenciar custo de investigação de investigação formal.",
+      "human_review": "RECOMMENDED",
+      "pending_validation": false,
+      "model_question": "Qual é o tratamento de “Custos de investigação” em cada fonte?",
+      "extraction_rule": "Extrair trecho literal, fonte, cláusula, página e status de contratação.",
+      "weight": 7,
+      "importance": "HIGH",
+      "justification": "Parte relevante dos eventos de D&O começa por investigação.",
+      "related": []
+    },
+    {
+      "id": "DO-009",
+      "domain": "Multas",
+      "name": "Custo de defesa / depósitos recursais para multas",
+      "variants": [
+        "Custo de defesa / depósitos recursais para multas",
+        "cobertura custo de defesa / depósitos recursais para multas"
+      ],
+      "criterion": "Na AKAD, o texto fornecido não demonstra cobertura autônoma de multa; requer conferência.",
+      "human_review": "RECOMMENDED",
+      "pending_validation": false,
+      "model_question": "Qual é o tratamento de “Custo de defesa / depósitos recursais para multas” em cada fonte?",
+      "extraction_rule": "Extrair trecho literal, fonte, cláusula, página e status de contratação.",
+      "weight": null,
+      "importance": "UNWEIGHTED",
+      "justification": null,
+      "related": [
+        "DO-015"
+      ]
+    },
+    {
+      "id": "DO-010",
+      "domain": "Emergencial",
+      "name": "Defesa Emergencial",
+      "variants": [
+        "Defesa Emergencial",
+        "Custos emergenciais",
+        "cobertura custos emergenciais"
+      ],
+      "criterion": "Comparar dispensa de anuência e escopo.",
+      "human_review": "RECOMMENDED",
+      "pending_validation": false,
+      "model_question": "Qual é o tratamento de “Custos emergenciais” em cada fonte?",
+      "extraction_rule": "Extrair trecho literal, fonte, cláusula, página e status de contratação.",
+      "weight": 4,
+      "importance": "MEDIUM",
+      "justification": "Atuação imediata em situação crítica.",
+      "related": []
+    },
+    {
+      "id": "DO-011",
+      "domain": "Entidades externas",
+      "name": "Diretor de entidade externa",
+      "variants": [
+        "Diretor de entidade externa",
+        "cobertura diretor de entidade externa"
+      ],
+      "criterion": "AKAD associa a cláusula emergencial; validar escopo efetivo.",
+      "human_review": "REQUIRED",
+      "pending_validation": false,
+      "model_question": "Qual é o tratamento de “Diretor de entidade externa” em cada fonte?",
+      "extraction_rule": "Extrair trecho literal, fonte, cláusula, página e status de contratação.",
+      "weight": null,
+      "importance": "UNWEIGHTED",
+      "justification": null,
+      "related": []
+    },
+    {
+      "id": "DO-012",
+      "domain": "Patrimonial",
+      "name": "Extradição",
+      "variants": [
+        "Extradição",
+        "Extradiação",
+        "cobertura extradiação"
+      ],
+      "criterion": "Termos e escopo não são equivalentes automaticamente.",
+      "human_review": "RECOMMENDED",
+      "pending_validation": false,
+      "model_question": "Qual é o tratamento de “Extradiação” em cada fonte?",
+      "extraction_rule": "Extrair trecho literal, fonte, cláusula, página e status de contratação.",
+      "weight": null,
+      "importance": "UNWEIGHTED",
+      "justification": null,
+      "related": []
+    },
+    {
+      "id": "DO-013",
+      "domain": "Garantias pessoais",
+      "name": "Avalista ou Fiador",
+      "variants": [
+        "Avalista ou Fiador",
+        "Avalistas, fiadores e fiel depositário",
+        "cobertura avalistas, fiadores e fiel depositário"
+      ],
+      "criterion": "Equivalência funcional; conferir limites.",
+      "human_review": "RECOMMENDED",
+      "pending_validation": false,
+      "model_question": "Qual é o tratamento de “Avalistas, fiadores e fiel depositário” em cada fonte?",
+      "extraction_rule": "Extrair trecho literal, fonte, cláusula, página e status de contratação.",
+      "weight": 2,
+      "importance": "LOW",
+      "justification": "Proteção ligada a garantias pessoais.",
+      "related": []
+    },
+    {
+      "id": "DO-014",
+      "domain": "Inabilitação",
+      "name": "Inabilitação",
+      "variants": [
+        "Inabilitação",
+        "Inabilitação de um segurado",
+        "cobertura inabilitação de um segurado"
+      ],
+      "criterion": "Comparar natureza da indenização.",
+      "human_review": "RECOMMENDED",
+      "pending_validation": false,
+      "model_question": "Qual é o tratamento de “Inabilitação de um segurado” em cada fonte?",
+      "extraction_rule": "Extrair trecho literal, fonte, cláusula, página e status de contratação.",
+      "weight": 2,
+      "importance": "LOW",
+      "justification": "Proteção para situação específica.",
+      "related": []
+    },
+    {
+      "id": "DO-015",
+      "domain": "Multas",
+      "name": "Multas e Penalidades",
+      "variants": [
+        "Multas e Penalidades",
+        "cobertura multas e penalidades"
+      ],
+      "criterion": "Cobertura expressamente descrita na KOVR; confirmar contratação e limites.",
+      "human_review": "RECOMMENDED",
+      "pending_validation": false,
+      "model_question": "Qual é o tratamento de “Multas e penalidades” em cada fonte?",
+      "extraction_rule": "Extrair trecho literal, fonte, cláusula, página e status de contratação.",
+      "weight": 7,
+      "importance": "HIGH",
+      "justification": "Impacto financeiro relevante.",
+      "related": [
+        "DO-009"
+      ]
+    },
+    {
+      "id": "DO-016",
+      "domain": "Societário",
+      "name": "Novas Subsidiárias",
+      "variants": [
+        "Novas Subsidiárias",
+        "cobertura novas subsidiárias"
+      ],
+      "criterion": "AKAD informa limite de até 30% do total de ativos do Tomador no conceito-base.",
+      "human_review": "RECOMMENDED",
+      "pending_validation": false,
+      "model_question": "Qual é o tratamento de “Novas subsidiárias” em cada fonte?",
+      "extraction_rule": "Extrair trecho literal, fonte, cláusula, página e status de contratação.",
+      "weight": 4,
+      "importance": "MEDIUM",
+      "justification": "Acompanha crescimento societário.",
+      "related": []
+    },
+    {
+      "id": "DO-017",
+      "domain": "Trabalhista",
+      "name": "Práticas Trabalhistas Indevidas",
+      "variants": [
+        "Práticas Trabalhistas Indevidas",
+        "Práticas trabalhistas",
+        "cobertura práticas trabalhistas"
+      ],
+      "criterion": "Comparar verbas excluídas e extensão de danos.",
+      "human_review": "RECOMMENDED",
+      "pending_validation": false,
+      "model_question": "Qual é o tratamento de “Práticas trabalhistas” em cada fonte?",
+      "extraction_rule": "Extrair trecho literal, fonte, cláusula, página e status de contratação.",
+      "weight": 7,
+      "importance": "HIGH",
+      "justification": "Fonte recorrente de reclamações contra administradores.",
+      "related": []
+    },
+    {
+      "id": "DO-018",
+      "domain": "Prazos",
+      "name": "Segurados Aposentados",
+      "variants": [
+        "Segurados Aposentados",
+        "Prazo complementar para aposentados",
+        "cobertura prazo complementar para aposentados"
+      ],
+      "criterion": "Conceito funcionalmente próximo; validar hipóteses.",
+      "human_review": "REQUIRED",
+      "pending_validation": false,
+      "model_question": "Qual é o tratamento de “Prazo complementar para aposentados” em cada fonte?",
+      "extraction_rule": "Extrair trecho literal, fonte, cláusula, página e status de contratação.",
+      "weight": 7,
+      "importance": "HIGH",
+      "justification": "Reclamações tardias após desligamento.",
+      "related": []
+    },
+    {
+      "id": "DO-019",
+      "domain": "Prazos",
+      "name": "Prazo complementar para demissões voluntárias",
+      "variants": [
+        "Prazo complementar para demissões voluntárias",
+        "cobertura prazo complementar para demissões voluntárias"
+      ],
+      "criterion": "KOVR não foi descrita neste item no material fornecido.",
+      "human_review": "RECOMMENDED",
+      "pending_validation": false,
+      "model_question": "Qual é o tratamento de “Prazo complementar para demissões voluntárias” em cada fonte?",
+      "extraction_rule": "Extrair trecho literal, fonte, cláusula, página e status de contratação.",
+      "weight": null,
+      "importance": "UNWEIGHTED",
+      "justification": null,
+      "related": []
+    },
+    {
+      "id": "DO-020",
+      "domain": "Imagem",
+      "name": "Proteção de Imagem",
+      "variants": [
+        "Proteção de Imagem",
+        "Proteção da imagem pessoal / relações públicas",
+        "cobertura proteção da imagem pessoal / relações públicas"
+      ],
+      "criterion": "Comparar beneficiários, despesas e gatilho.",
+      "human_review": "RECOMMENDED",
+      "pending_validation": false,
+      "model_question": "Qual é o tratamento de “Proteção da imagem pessoal / relações públicas” em cada fonte?",
+      "extraction_rule": "Extrair trecho literal, fonte, cláusula, página e status de contratação.",
+      "weight": 4,
+      "importance": "MEDIUM",
+      "justification": "Apoio à gestão de crise reputacional.",
+      "related": []
+    },
+    {
+      "id": "DO-021",
+      "domain": "Tributária",
+      "name": "Responsabilidade Tributária",
+      "variants": [
+        "Responsabilidade Tributária",
+        "cobertura responsabilidade tributária"
+      ],
+      "criterion": "Comparar requisito de decisão final e natureza da obrigação.",
+      "human_review": "RECOMMENDED",
+      "pending_validation": false,
+      "model_question": "Qual é o tratamento de “Responsabilidade tributária” em cada fonte?",
+      "extraction_rule": "Extrair trecho literal, fonte, cláusula, página e status de contratação.",
+      "weight": 7,
+      "importance": "HIGH",
+      "justification": "Pode atingir o patrimônio pessoal do administrador.",
+      "related": []
+    },
+    {
+      "id": "DO-022",
+      "domain": "Profissional",
+      "name": "Advogados internos",
+      "variants": [
+        "Advogados internos",
+        "cobertura advogados internos"
+      ],
+      "criterion": "KOVR apresenta definição mais ampla de profissionais internos; validar escopo.",
+      "human_review": "REQUIRED",
+      "pending_validation": false,
+      "model_question": "Qual é o tratamento de “Advogados internos” em cada fonte?",
+      "extraction_rule": "Extrair trecho literal, fonte, cláusula, página e status de contratação.",
+      "weight": null,
+      "importance": "UNWEIGHTED",
+      "justification": null,
+      "related": []
+    },
+    {
+      "id": "DO-023",
+      "domain": "Profissional",
+      "name": "Contadores internos, gerentes de riscos e auditores internos",
+      "variants": [
+        "Contadores internos, gerentes de riscos e auditores internos",
+        "cobertura contadores internos, gerentes de riscos e auditores internos"
+      ],
+      "criterion": "Registrar como extensão do conceito de Segurado, não como cobertura isolada.",
+      "human_review": "RECOMMENDED",
+      "pending_validation": false,
+      "model_question": "Qual é o tratamento de “Contadores internos, gerentes de riscos e auditores internos” em cada fonte?",
+      "extraction_rule": "Extrair trecho literal, fonte, cláusula, página e status de contratação.",
+      "weight": null,
+      "importance": "UNWEIGHTED",
+      "justification": null,
+      "related": []
+    },
+    {
+      "id": "DO-024",
+      "domain": "Danos",
+      "name": "Danos Corporais",
+      "variants": [
+        "Danos Corporais",
+        "cobertura danos corporais"
+      ],
+      "criterion": "Conceito detalhado na KOVR; conferir definição AKAD.",
+      "human_review": "RECOMMENDED",
+      "pending_validation": false,
+      "model_question": "Qual é o tratamento de “Danos corporais” em cada fonte?",
+      "extraction_rule": "Extrair trecho literal, fonte, cláusula, página e status de contratação.",
+      "weight": 7,
+      "importance": "HIGH",
+      "justification": "Danos físicos a terceiros.",
+      "related": []
+    },
+    {
+      "id": "DO-025",
+      "domain": "Danos",
+      "name": "Danos Materiais",
+      "variants": [
+        "Danos Materiais",
+        "cobertura danos materiais"
+      ],
+      "criterion": "Conferir se danos imateriais estão incluídos na redação aplicável.",
+      "human_review": "RECOMMENDED",
+      "pending_validation": false,
+      "model_question": "Qual é o tratamento de “Danos materiais” em cada fonte?",
+      "extraction_rule": "Extrair trecho literal, fonte, cláusula, página e status de contratação.",
+      "weight": 7,
+      "importance": "HIGH",
+      "justification": "Danos patrimoniais a terceiros.",
+      "related": []
+    },
+    {
+      "id": "DO-026",
+      "domain": "Danos",
+      "name": "Danos Morais",
+      "variants": [
+        "Danos Morais",
+        "cobertura danos morais"
+      ],
+      "criterion": "Conceito detalhado na KOVR; conferir definição AKAD.",
+      "human_review": "RECOMMENDED",
+      "pending_validation": false,
+      "model_question": "Qual é o tratamento de “Danos morais” em cada fonte?",
+      "extraction_rule": "Extrair trecho literal, fonte, cláusula, página e status de contratação.",
+      "weight": 7,
+      "importance": "HIGH",
+      "justification": "Litígios envolvendo reputação e personalidade.",
+      "related": []
+    },
+    {
+      "id": "DO-027",
+      "domain": "Profissional",
+      "name": "Prestação de Serviços Profissionais",
+      "variants": [
+        "Prestação de Serviços Profissionais",
+        "Erros e omissões (E&O)",
+        "cobertura erros e omissões (e&o)"
+      ],
+      "criterion": "Diferenciar RC profissional de administradores e E&O societário.",
+      "human_review": "RECOMMENDED",
+      "pending_validation": false,
+      "model_question": "Qual é o tratamento de “Erros e omissões (E&O)” em cada fonte?",
+      "extraction_rule": "Extrair trecho literal, fonte, cláusula, página e status de contratação.",
+      "weight": 4,
+      "importance": "MEDIUM",
+      "justification": "Responsabilidade por serviços prestados.",
+      "related": []
+    },
+    {
+      "id": "DO-028",
+      "domain": "Crise",
+      "name": "Eventos extraordinários com reguladores",
+      "variants": [
+        "Eventos extraordinários com reguladores",
+        "cobertura eventos extraordinários com reguladores"
+      ],
+      "criterion": "Validar definição de Evento Regulatório.",
+      "human_review": "REQUIRED",
+      "pending_validation": false,
+      "model_question": "Qual é o tratamento de “Eventos extraordinários com reguladores” em cada fonte?",
+      "extraction_rule": "Extrair trecho literal, fonte, cláusula, página e status de contratação.",
+      "weight": null,
+      "importance": "UNWEIGHTED",
+      "justification": null,
+      "related": [
+        "DO-029"
+      ]
+    },
+    {
+      "id": "DO-029",
+      "domain": "Crise",
+      "name": "Gerenciamento de Crise",
+      "variants": [
+        "Gerenciamento de Crise",
+        "Gerenciamento de crise (PJ)",
+        "cobertura gerenciamento de crise (pj)"
+      ],
+      "criterion": "Comparar pessoa jurídica, capital fechado e despesas elegíveis.",
+      "human_review": "RECOMMENDED",
+      "pending_validation": false,
+      "model_question": "Qual é o tratamento de “Gerenciamento de crise (PJ)” em cada fonte?",
+      "extraction_rule": "Extrair trecho literal, fonte, cláusula, página e status de contratação.",
+      "weight": 2,
+      "importance": "LOW",
+      "justification": "Mitigação reputacional complementar.",
+      "related": [
+        "DO-028"
+      ]
+    },
+    {
+      "id": "DO-030",
+      "domain": "Sucessão",
+      "name": "Herdeiros, sucessores, representantes legais, espólio, cônjuge e companheiro",
+      "variants": [
+        "Herdeiros, sucessores, representantes legais, espólio, cônjuge e companheiro",
+        "cobertura herdeiros, sucessores, representantes legais, espólio, cônjuge e companheiro"
+      ],
+      "criterion": "Validar momento do falecimento e vínculo com ato original.",
+      "human_review": "REQUIRED",
+      "pending_validation": false,
+      "model_question": "Qual é o tratamento de “Herdeiros, sucessores, representantes legais, espólio, cônjuge e companheiro” em cada fonte?",
+      "extraction_rule": "Extrair trecho literal, fonte, cláusula, página e status de contratação.",
+      "weight": null,
+      "importance": "UNWEIGHTED",
+      "justification": null,
+      "related": []
+    },
+    {
+      "id": "DO-031",
+      "domain": "Responsabilidade solidária",
+      "name": "Cobertura para responsabilidade solidária de bens",
+      "variants": [
+        "Cobertura para responsabilidade solidária de bens",
+        "cobertura cobertura para responsabilidade solidária de bens"
+      ],
+      "criterion": "Ponto de validação para aderência ao Termo de Referência.",
+      "human_review": "RECOMMENDED",
+      "pending_validation": false,
+      "model_question": "Qual é o tratamento de “Cobertura para responsabilidade solidária de bens” em cada fonte?",
+      "extraction_rule": "Extrair trecho literal, fonte, cláusula, página e status de contratação.",
+      "weight": null,
+      "importance": "UNWEIGHTED",
+      "justification": null,
+      "related": []
+    },
+    {
+      "id": "DO-032",
+      "domain": "Ambiental",
+      "name": "Responsabilidade Ambiental",
+      "variants": [
+        "Responsabilidade Ambiental",
+        "Responsabilidade civil ambiental por poluição",
+        "cobertura responsabilidade civil ambiental por poluição"
+      ],
+      "criterion": "Comparar amplitude, danos cobertos, LMI e desconsideração.",
+      "human_review": "RECOMMENDED",
+      "pending_validation": false,
+      "model_question": "Qual é o tratamento de “Responsabilidade civil ambiental por poluição” em cada fonte?",
+      "extraction_rule": "Extrair trecho literal, fonte, cláusula, página e status de contratação.",
+      "weight": 7,
+      "importance": "HIGH",
+      "justification": "Exposição crescente ligada a decisões de gestão.",
+      "related": []
+    },
+    {
+      "id": "DO-033",
+      "domain": "Relacionamento",
+      "name": "Sociedade contra Segurado",
+      "variants": [
+        "Sociedade contra Segurado",
+        "Reclamações contra o Segurado pelo Tomador, acionista ou sócio (Sociedade contra Segurado)",
+        "Reclamações contra o Segurado pelo Tomador, acionista ou sócio",
+        "cobertura reclamações contra o segurado pelo tomador, acionista ou sócio"
+      ],
+      "criterion": "KOVR apresenta cobertura; AKAD não localizada no material.",
+      "human_review": "REQUIRED",
+      "pending_validation": false,
+      "model_question": "Qual é o tratamento de “Reclamações contra o Segurado pelo Tomador, acionista ou sócio” em cada fonte?",
+      "extraction_rule": "Extrair trecho literal, fonte, cláusula, página e status de contratação.",
+      "weight": 7,
+      "importance": "HIGH",
+      "justification": "Reclamações da sociedade contra administradores.",
+      "related": []
+    },
+    {
+      "id": "DO-034",
+      "domain": "Relacionamento",
+      "name": "Segurado contra Segurado",
+      "variants": [
+        "Segurado contra Segurado",
+        "Reclamações contra o Segurado por outro Segurado (Segurado contra Segurado)",
+        "Reclamações contra o Segurado por outro Segurado",
+        "cobertura reclamações contra o segurado por outro segurado"
+      ],
+      "criterion": "KOVR apresenta cobertura; AKAD não localizada no material.",
+      "human_review": "REQUIRED",
+      "pending_validation": false,
+      "model_question": "Qual é o tratamento de “Reclamações contra o Segurado por outro Segurado” em cada fonte?",
+      "extraction_rule": "Extrair trecho literal, fonte, cláusula, página e status de contratação.",
+      "weight": 7,
+      "importance": "HIGH",
+      "justification": "Conflitos entre pessoas protegidas pela apólice.",
+      "related": []
+    },
+    {
+      "id": "DO-035",
+      "domain": "Acordos",
+      "name": "TAC, TC e acordos",
+      "variants": [
+        "TAC, TC e acordos",
+        "cobertura tac, tc e acordos"
+      ],
+      "criterion": "Não localizado para ambas no material fornecido; requer validação.",
+      "human_review": "REQUIRED",
+      "pending_validation": false,
+      "model_question": "Qual é o tratamento de “TAC, TC e acordos” em cada fonte?",
+      "extraction_rule": "Extrair trecho literal, fonte, cláusula, página e status de contratação.",
+      "weight": null,
+      "importance": "UNWEIGHTED",
+      "justification": null,
+      "related": []
+    },
+    {
+      "id": "DO-036",
+      "domain": "Limites",
+      "name": "LMG",
+      "variants": [
+        "LMG",
+        "LMG – Limite Máximo de Garantia",
+        "limite máximo de garantia",
+        "limite máximo de indenização",
+        "LMI agregado"
+      ],
+      "criterion": "Valor, moeda, limite agregado ou por evento, sublimites, erosão, franquia, participação obrigatória e relação com o LMG total.",
+      "human_review": "REQUIRED",
+      "pending_validation": true,
+      "model_question": "Qual é o tratamento de “LMG – Limite Máximo de Garantia” no documento?",
+      "extraction_rule": "Extrair trecho literal, fonte, cláusula, página e status de contratação.",
+      "weight": 10,
+      "importance": "CRITICAL",
+      "justification": "Capacidade financeira máxima da apólice.",
+      "related": []
+    },
+    {
+      "id": "DO-037",
+      "domain": "Prazos",
+      "name": "Retroatividade",
+      "variants": [
+        "Retroatividade",
+        "data retroativa",
+        "período de retroatividade",
+        "cobertura retroativa"
+      ],
+      "criterion": "Data ou extensão, se é automática ou contratável, condições de elegibilidade.",
+      "human_review": "REQUIRED",
+      "pending_validation": true,
+      "model_question": "Qual é o tratamento de “Retroatividade” no documento?",
+      "extraction_rule": "Extrair trecho literal, fonte, cláusula, página e status de contratação.",
+      "weight": 10,
+      "importance": "CRITICAL",
+      "justification": "Proteção para atos ou fatos anteriores à vigência.",
+      "related": []
+    },
+    {
+      "id": "DO-038",
+      "domain": "Âmbito",
+      "name": "Territorialidade",
+      "variants": [
+        "Territorialidade",
+        "âmbito territorial",
+        "território",
+        "abrangência geográfica",
+        "jurisdição"
+      ],
+      "criterion": "Território, local do ato e da reclamação, jurisdição e limitações por sanções.",
+      "human_review": "REQUIRED",
+      "pending_validation": true,
+      "model_question": "Qual é o tratamento de “Territorialidade” no documento?",
+      "extraction_rule": "Extrair trecho literal, fonte, cláusula, página e status de contratação.",
+      "weight": 10,
+      "importance": "CRITICAL",
+      "justification": "Define a abrangência geográfica da proteção.",
+      "related": []
+    },
+    {
+      "id": "DO-039",
+      "domain": "Prazos",
+      "name": "Prazo Complementar",
+      "variants": [
+        "Prazo Complementar",
+        "período complementar para apresentação de reclamações"
+      ],
+      "criterion": "Extensão, eventos que ativam o prazo, notificação e elegibilidade.",
+      "human_review": "REQUIRED",
+      "pending_validation": true,
+      "model_question": "Qual é o tratamento de “Prazo complementar” no documento?",
+      "extraction_rule": "Extrair trecho literal, fonte, cláusula, página e status de contratação.",
+      "weight": 10,
+      "importance": "CRITICAL",
+      "justification": "Proteção para reclamações após o fim da vigência.",
+      "related": []
+    },
+    {
+      "id": "DO-040",
+      "domain": "Prazos",
+      "name": "Prazo Suplementar",
+      "variants": [
+        "Prazo Suplementar",
+        "período suplementar",
+        "extensão contratável pós-vigência"
+      ],
+      "criterion": "Extensão, contratação mediante prêmio adicional e condições.",
+      "human_review": "REQUIRED",
+      "pending_validation": true,
+      "model_question": "Qual é o tratamento de “Prazo suplementar” no documento?",
+      "extraction_rule": "Extrair trecho literal, fonte, cláusula, página e status de contratação.",
+      "weight": 10,
+      "importance": "CRITICAL",
+      "justification": "Extensão contratável da proteção após a vigência.",
+      "related": []
+    },
+    {
+      "id": "DO-041",
+      "domain": "Sinistro",
+      "name": "Cláusula de Notificação",
+      "variants": [
+        "Cláusula de Notificação",
+        "notificação de circunstância",
+        "aviso de fatos ou circunstâncias"
+      ],
+      "criterion": "Prazo, forma e efeitos da notificação de fatos ou circunstâncias.",
+      "human_review": "REQUIRED",
+      "pending_validation": true,
+      "model_question": "Qual é o tratamento de “Cláusula de notificação” no documento?",
+      "extraction_rule": "Extrair trecho literal, fonte, cláusula, página e status de contratação.",
+      "weight": 10,
+      "importance": "CRITICAL",
+      "justification": "Preserva a cobertura futura quando a circunstância é comunicada.",
+      "related": []
+    },
+    {
+      "id": "DO-042",
+      "domain": "Anticorrupção",
+      "name": "Atos Lesivos",
+      "variants": [
+        "Atos Lesivos",
+        "Lei 12.846/2013",
+        "lei anticorrupção"
+      ],
+      "criterion": "Cobertura, exclusões e condições para atos lesivos (Lei 12.846/2013).",
+      "human_review": "REQUIRED",
+      "pending_validation": true,
+      "model_question": "Qual é o tratamento de “Atos lesivos” no documento?",
+      "extraction_rule": "Extrair trecho literal, fonte, cláusula, página e status de contratação.",
+      "weight": 10,
+      "importance": "CRITICAL",
+      "justification": "Exposição a riscos anticorrupção e exclusões aplicáveis.",
+      "related": []
+    },
+    {
+      "id": "DO-043",
+      "domain": "Âmbito",
+      "name": "Processos no Exterior",
+      "variants": [
+        "Processos no Exterior",
+        "reclamações fora do Brasil",
+        "jurisdição estrangeira"
+      ],
+      "criterion": "Território e jurisdições aceitos para reclamações no exterior.",
+      "human_review": "REQUIRED",
+      "pending_validation": true,
+      "model_question": "Qual é o tratamento de “Processos no exterior” no documento?",
+      "extraction_rule": "Extrair trecho literal, fonte, cláusula, página e status de contratação.",
+      "weight": 2,
+      "importance": "LOW",
+      "justification": "Relevante para operações internacionais.",
+      "related": []
+    },
+    {
+      "id": "DO-044",
+      "domain": "Sinistro",
+      "name": "Salvamento e Contenção",
+      "variants": [
+        "Salvamento e Contenção",
+        "despesas de salvamento",
+        "contenção de sinistro",
+        "mitigação"
+      ],
+      "criterion": "Despesas elegíveis e condições de salvamento e contenção.",
+      "human_review": "REQUIRED",
+      "pending_validation": true,
+      "model_question": "Qual é o tratamento de “Salvamento e contenção” no documento?",
+      "extraction_rule": "Extrair trecho literal, fonte, cláusula, página e status de contratação.",
+      "weight": 2,
+      "importance": "LOW",
+      "justification": "Mitigação das consequências do sinistro.",
+      "related": []
+    }
+  ]
+}

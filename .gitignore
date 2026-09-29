@@ -29,6 +29,7 @@ pnpm-debug.log*
 *.key
 firebase-adminsdk-*.json
 service-account*.json
+keys/
 
 # IDE and OS
 .idea/
@@ -47,3 +48,6 @@ tmp/
 temp/
 *.tmp
 *.log
+
+# Arquivos originais enviados (STORAGE_BACKEND=local)
+backend/.data/

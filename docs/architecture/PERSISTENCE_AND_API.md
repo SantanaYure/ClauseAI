@@ -4,7 +4,19 @@
 
 O Firestore armazena metadados e estruturas consultáveis. O PDF/imagem original fica no Firebase Storage. O resultado bruto da IA é separado do modelo estruturado para auditoria e para evitar que uma resposta não validada seja usada na UI.
 
-### Coleções
+### Implementação atual (MVP)
+
+O backend grava hoje um modelo mais enxuto, com o mesmo conteúdo:
+
+```text
+policies/{policy_id}                                  # apólice + documentos (metadados, status, falha)
+policies/{policy_id}/concept_occurrences/{concept_id} # ocorrências consolidadas com evidências literais
+comparisons/{comparison_id}                           # itens, avaliações, scores, perfis, resumo e Quality Gate
+```
+
+Os originais ficam em `policies/{policy_id}/{document_id}.{pdf|png|jpg}`, sem URL pública: por padrão numa pasta local do backend (`STORAGE_BACKEND=local`, `backend/.data/uploads`) e, opcionalmente, no Firebase Storage (`STORAGE_BACKEND=firebase`, plano Blaze) — ver ADR-022. A base de conhecimento é um arquivo JSON versionado no código (`backend/app/infrastructure/knowledge_base/knowledge_base.json`), gerado pelo script Python `backend/scripts/build_knowledge_base.py` a partir de `docs/domain/`. As coleções abaixo continuam como alvo de evolução (histórico de jobs, resultado bruto da IA e `processed_events`).
+
+### Coleções (modelo de referência)
 
 ```text
 documents/{document_id}
@@ -123,7 +135,9 @@ Limitar listas, tamanho de payload e paginação. O cliente não deve buscar tod
 
 ## 3. API REST
 
-Base path recomendado: `/api/v1`. Todos os endpoints aceitam/responderão JSON, exceto upload multipart. Respostas de criação assíncrona usam `202 Accepted`.
+Base path: `/api/v1`. Todos os endpoints aceitam e respondem JSON, exceto o upload multipart. Respostas de criação assíncrona usam `202 Accepted`. Documentação interativa em `/api/v1/docs`.
+
+Implementados: `POST/GET /policies`, `GET /policies/{id}`, `POST/GET /comparisons`, `GET /comparisons/{id}`, `GET /concepts`, `GET /concepts/{id}`, `GET /concepts/{id}/occurrences` e `POST /queries`. Os endpoints `/documents` abaixo continuam planejados: no MVP, os documentos são enviados e consultados pela apólice.
 
 ### POST `/policies`
 
@@ -260,7 +274,7 @@ Estados públicos: `UPLOADED`, `PROCESSING`, `EXTRACTING`, `VALIDATING`, `COMPLE
 }
 ```
 
-Estados: `REQUESTED`, `DETERMINISTIC_COMPLETED`, `ASSESSING`, `SCORED`, `SUMMARIZING`, `COMPLETED`, `PARTIAL`, `FAILED`. Números trafegam como string decimal.
+Estados: `REQUESTED`, `DETERMINISTIC_COMPLETED`, `ASSESSING`, `SCORED`, `SUMMARIZING`, `COMPLETED`, `PARTIAL`, `FAILED`. Números trafegam como números JSON; o cálculo interno usa `Decimal` e arredonda só na saída.
 
 ### GET `/concepts`
 

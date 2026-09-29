@@ -5,6 +5,7 @@ import { Icon, type IconName } from '../../components/Icon';
 import { clauseApi } from '../../services/api/clause-api';
 import { formatDateTime } from '../../shared/format';
 import { DECISION_MODE_LABELS } from '../../shared/labels';
+import { hasBusyComparison, isComparisonBusy, PROCESSING_POLL_MS } from '../../shared/processing';
 import { useApiData } from '../../shared/useApiData';
 
 const STEPS: { icon: IconName; title: string; text: string }[] = [
@@ -49,7 +50,10 @@ const PRINCIPLES: { icon: IconName; title: string; text: string }[] = [
 ];
 
 function LatestComparison() {
-  const state = useApiData('comparisons', () => clauseApi.listComparisons());
+  const state = useApiData('comparisons', () => clauseApi.listComparisons(), {
+    pollMs: PROCESSING_POLL_MS,
+    shouldPoll: hasBusyComparison,
+  });
   if (state.status !== 'success') return null;
   const latest = state.data.find((comparison) => comparison.status !== 'FAILED');
   if (!latest) return null;
@@ -67,8 +71,14 @@ function LatestComparison() {
             {latest.policyB.insurer.replace('Seguradora ', '')}
           </strong>
           <small>{formatDateTime(latest.createdAt)}</small>
-          {latest.decisionMode && (
-            <Badge tone="neutral">{DECISION_MODE_LABELS[latest.decisionMode]}</Badge>
+          {isComparisonBusy(latest.status) ? (
+            <Badge tone="info" busy>
+              Em processamento
+            </Badge>
+          ) : (
+            latest.decisionMode && (
+              <Badge tone="neutral">{DECISION_MODE_LABELS[latest.decisionMode]}</Badge>
+            )
           )}
         </span>
         <Icon name="chevronRight" size={18} />
