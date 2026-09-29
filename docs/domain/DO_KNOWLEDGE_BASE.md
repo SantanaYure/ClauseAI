@@ -18,7 +18,7 @@ Os arquivos originais não devem ser editados para “corrigir” o software. Mu
 O desafio e o prompt mestre definem as mesmas sete etapas, que estruturam toda a arquitetura:
 
 1. Recebimento dos documentos.
-2. Extração automática do conteúdo (leitura nativa de PDF e OCR/LLM multimodal).
+2. Extração automática do conteúdo (leitura nativa de PDF, leitura local de DOCX e OCR/LLM multimodal para imagens e PDF digitalizado).
 3. Organização das informações por documento, seguradora, seção, cláusula, cobertura e conceito-base.
 4. Armazenamento estruturado de evidências, metadados, pesos e resultados.
 5. Consulta por conceito, cobertura, termo, seguradora, cláusula ou apólice.
@@ -274,7 +274,7 @@ A UI deve mostrar: documentos processados, qualidade da extração, seletor de A
 | Verde | equivalência ou vantagem documental comprovada |
 | Cinza | informação não localizada |
 
-Não usar verde para contratação quando houver apenas menção nas Condições Gerais. Cor nunca é o único sinal: toda célula também tem rótulo textual.
+Não usar verde para contratação quando houver apenas menção nas Condições Gerais. Cor nunca é o único sinal: toda célula também tem rótulo textual e ícone. O amarelo da marca (`#FFD700`) é só acento visual e nunca indica resultado; o amarelo da tabela acima é a cor de parecer e não muda. A ordem das informações na tela está na SPEC-010.
 
 ## 9. Mapeamento dos prompts
 

@@ -2,7 +2,7 @@
 
 ## 1. Firestore
 
-O Firestore armazena metadados e estruturas consultáveis. O PDF/imagem original fica no Firebase Storage. O resultado bruto da IA é separado do modelo estruturado para auditoria e para evitar que uma resposta não validada seja usada na UI.
+O Firestore armazena metadados e estruturas consultáveis. O original (PDF, imagem ou DOCX) fica no armazenamento de arquivos (ver ADR-022). O resultado bruto da IA é separado do modelo estruturado para auditoria e para evitar que uma resposta não validada seja usada na UI.
 
 ### Implementação atual (MVP)
 
@@ -14,7 +14,7 @@ policies/{policy_id}/concept_occurrences/{concept_id} # ocorrências consolidada
 comparisons/{comparison_id}                           # itens, avaliações, scores, perfis, resumo e Quality Gate
 ```
 
-Os originais ficam em `policies/{policy_id}/{document_id}.{pdf|png|jpg}`, sem URL pública: por padrão numa pasta local do backend (`STORAGE_BACKEND=local`, `backend/.data/uploads`) e, opcionalmente, no Firebase Storage (`STORAGE_BACKEND=firebase`, plano Blaze) — ver ADR-022. A base de conhecimento é um arquivo JSON versionado no código (`backend/app/infrastructure/knowledge_base/knowledge_base.json`), gerado pelo script Python `backend/scripts/build_knowledge_base.py` a partir de `docs/domain/`. As coleções abaixo continuam como alvo de evolução (histórico de jobs, resultado bruto da IA e `processed_events`).
+Os originais ficam em `policies/{policy_id}/{document_id}.{pdf|png|jpg|docx}`, sem URL pública: por padrão numa pasta local do backend (`STORAGE_BACKEND=local`, `backend/.data/uploads`) e, opcionalmente, no Firebase Storage (`STORAGE_BACKEND=firebase`, plano Blaze) — ver ADR-022. A base de conhecimento é um arquivo JSON versionado no código (`backend/app/infrastructure/knowledge_base/knowledge_base.json`), gerado pelo script Python `backend/scripts/build_knowledge_base.py` a partir de `docs/domain/`. As coleções abaixo continuam como alvo de evolução (histórico de jobs, resultado bruto da IA e `processed_events`).
 
 ### Coleções (modelo de referência)
 
@@ -60,6 +60,8 @@ Carregada a partir de [`domain/DO_KNOWLEDGE_BASE.md`](../domain/DO_KNOWLEDGE_BAS
 
 `evidence_id`, `document_id`, `page`, `section_ref`, `clause_ref`, `literal_text`, `content_kind`, `extraction_method`, `confidence`, `low_confidence`, `version`. Registros não são sobrescritos; correções criam nova versão.
 
+**Origem em DOCX.** DOCX não tem páginas fixas. `page` fica `null` e a origem vem de `section_ref` (título da seção) e da posição do bloco no documento. `page` só é preenchida quando o arquivo tem quebra de página explícita. `extraction_method` é `NATIVE`. A origem é estável: o mesmo arquivo gera sempre a mesma origem. Nomes e formato exatos dos campos de bloco: pendente de confirmação (backend-specialist).
+
 ### `documents/{document_id}`
 
 ```json
@@ -84,6 +86,8 @@ Carregada a partir de [`domain/DO_KNOWLEDGE_BASE.md`](../domain/DO_KNOWLEDGE_BAS
   "schema_version": 1
 }
 ```
+
+`file_kind` aceita `SEARCHABLE_PDF`, `SCANNED_PDF`, `IMAGE` e `DOCX`. Em DOCX, `ocr_required` é sempre `false` e `page_count` pode ser `null` (não há páginas fixas).
 
 ### `processing_jobs`
 
@@ -143,7 +147,7 @@ Implementados: `POST/GET /policies`, `GET/DELETE /policies/{id}`, `POST/GET /com
 
 **Objetivo:** criar uma apólice com todos os seus documentos de uma vez (tela “Adicionar apólice”).
 
-**Request:** `multipart/form-data` com `insurer?`, `name?` e um ou mais campos `files[]`, cada um acompanhado de `document_types[]` (`POLICY`, `SPECIFICATION`, `GENERAL_CONDITIONS`, `ENDORSEMENT`…). Cada arquivo passa pelas mesmas validações de `POST /documents` e gera um `Document` ligado à apólice.
+**Request:** `multipart/form-data` com `insurer?`, `name?` e um ou mais campos `files[]`, cada um acompanhado de `document_types[]` (`POLICY`, `SPECIFICATION`, `GENERAL_CONDITIONS`, `ENDORSEMENT`…). Cada arquivo (PDF, JPG, PNG ou DOCX) passa pelas mesmas validações de `POST /documents` e gera um `Document` ligado à apólice.
 
 **Response `202`:** `policy_id`, `status: PROCESSING`, `document_ids[]`, `correlation_id`.
 
@@ -151,7 +155,7 @@ Implementados: `POST/GET /policies`, `GET/DELETE /policies/{id}`, `POST/GET /com
 
 ### POST `/documents`
 
-**Objetivo:** receber PDF/imagem, validar extensão/MIME/tamanho, salvar o original e iniciar processamento. Com `policy_id`, acrescenta o documento (por exemplo, um endosso) a uma apólice existente.
+**Objetivo:** receber PDF, imagem (JPG, PNG) ou DOCX, validar o tipo pelo conteúdo, o tamanho e a integridade, salvar o original e iniciar processamento. Com `policy_id`, acrescenta o documento (por exemplo, um endosso) a uma apólice existente.
 
 **Request:** `multipart/form-data`, campo `file`; opcional `policy_id`, `document_type` e `metadata` JSON limitado.
 
@@ -167,6 +171,16 @@ Implementados: `POST/GET /policies`, `GET/DELETE /policies/{id}`, `POST/GET /com
 ```
 
 **Erros:** `400 INVALID_FILE`, `413 FILE_TOO_LARGE`, `415 UNSUPPORTED_MEDIA_TYPE`, `422 INVALID_METADATA`, `503 STORAGE_UNAVAILABLE`.
+
+**Formatos e detalhe do erro.** Aceitos: `application/pdf`, `image/jpeg`, `image/png` e `application/vnd.openxmlformats-officedocument.wordprocessingml.document` (DOCX). O tipo vem do conteúdo: DOCX é um zip com `[Content-Types].xml` e `word/document.xml`. Os códigos de erro não mudam; o detalhe vai em `message`, em português:
+
+| Situação | Código | `message` (exemplo) |
+|---|---|---|
+| Documento corrompido | `400 INVALID_FILE` | "O arquivo está corrompido e não pode ser lido." |
+| Documento protegido por senha | `400 INVALID_FILE` | "O arquivo está protegido por senha. Envie uma cópia sem senha." |
+| Tipo não suportado | `415 UNSUPPORTED_MEDIA_TYPE` | "Tipo de arquivo não suportado. Envie PDF, JPG, PNG ou DOCX." |
+
+Pendente de confirmação: texto e código HTTP finais, principalmente o de arquivo protegido por senha.
 
 ### GET `/documents`
 

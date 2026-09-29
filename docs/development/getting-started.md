@@ -53,6 +53,14 @@ npm run typecheck
 npm run build
 ```
 
+## Formatos de documento
+
+O sistema aceita PDF, JPG, PNG e DOCX. Para testar, use os exemplos de `Policy/` (PDF) ou envie um DOCX pela tela Apólices. DOCX é lido localmente, sem OCR. Detalhes na SPEC-001 e na SPEC-004.
+
+## Como a equipe trabalha
+
+O fluxo com subagentes está em [`conventions.md`](conventions.md#equipe-de-subagentes-e-fluxo-de-trabalho).
+
 ## Ambiente
 
 Copie os dois `.env.example` para `.env` apenas localmente. Nesta etapa, as variáveis de Firebase e IA são reservas documentadas e não são consumidas por adapters reais.

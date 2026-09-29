@@ -31,11 +31,11 @@ Regras de domínio (conceitos, pesos, escalas, pareceres, perfis, cores e frase 
 
 ### Objetivo e contexto
 
-Receber um PDF ou imagem e criar um `Document` em estado `UPLOADED` sem esperar extração. A classificação do documento (tipo, seguradora, vigência, versão, necessidade de OCR) ocorre no início do processamento com `P-INTAKE-001`.
+Receber um PDF, uma imagem (JPG, PNG) ou um DOCX e criar um `Document` em estado `UPLOADED` sem esperar extração. A classificação do documento (tipo, seguradora, vigência, versão, necessidade de OCR) ocorre no início do processamento com `P-INTAKE-001`.
 
 ### Comportamento, entradas e saídas
 
-- Entrada: multipart `file`, MIME detectável, tamanho dentro do limite configurado e metadados opcionais.
+- Entrada: multipart `file`, MIME detectável, tamanho dentro do limite configurado e metadados opcionais. Formatos aceitos: PDF, JPG, PNG e DOCX.
 - Saída: `document_id`, `status`, `correlation_id`, `status_url`, HTTP `202`.
 - Publica `DocumentUploaded` somente após persistir original e metadados.
 
@@ -45,7 +45,19 @@ Receber um PDF ou imagem e criar um `Document` em estado `UPLOADED` sem esperar 
 
 ### Regras e erros
 
-Aceitar somente `application/pdf` e imagens explicitamente configuradas; validar MIME por conteúdo quando possível; rejeitar vazio, excesso de tamanho e metadata inválida. Erros: `INVALID_FILE`, `UNSUPPORTED_MEDIA_TYPE`, `FILE_TOO_LARGE`, `STORAGE_UNAVAILABLE`.
+Aceitar somente `application/pdf`, imagens explicitamente configuradas (JPG, PNG) e DOCX (`application/vnd.openxmlformats-officedocument.wordprocessingml.document`); rejeitar vazio, excesso de tamanho e metadata inválida.
+
+O tipo é detectado pelo conteúdo, nunca só pela extensão ou pelo MIME informado. Um DOCX é um zip que contém `[Content-Types].xml` e `word/document.xml`. Um zip sem esses dois itens não é DOCX. DOCX protegido por senha não é um zip (vira um contêiner cifrado), e é reconhecido por isso.
+
+Erros: `INVALID_FILE`, `UNSUPPORTED_MEDIA_TYPE`, `FILE_TOO_LARGE`, `STORAGE_UNAVAILABLE`. Os códigos não mudam. O detalhe vai na mensagem, em português:
+
+| Situação | Código | Mensagem (exemplo) |
+|---|---|---|
+| Documento corrompido | `INVALID_FILE` | "O arquivo está corrompido e não pode ser lido." |
+| Documento protegido por senha | `INVALID_FILE` | "O arquivo está protegido por senha. Envie uma cópia sem senha." |
+| Tipo não suportado | `UNSUPPORTED_MEDIA_TYPE` | "Tipo de arquivo não suportado. Envie PDF, JPG, PNG ou DOCX." |
+
+Pendente de confirmação (backend-specialist): código HTTP e texto exatos de cada linha, principalmente o de arquivo protegido por senha.
 
 ### Critérios de aceite
 
@@ -54,6 +66,9 @@ Aceitar somente `application/pdf` e imagens explicitamente configuradas; validar
 - Falha no Storage não cria documento “processável”.
 - Evento contém envelope completo e correlação.
 - Requisição repetida não duplica quando a mesma chave de idempotência for fornecida.
+- DOCX válido é aceito e criado como `Document`, com o tipo detectado pelo conteúdo.
+- Arquivo renomeado (por exemplo, `.txt` chamado `apolice.docx`) é rejeitado com `UNSUPPORTED_MEDIA_TYPE`.
+- DOCX corrompido ou protegido por senha é rejeitado com `INVALID_FILE` e mensagem específica.
 
 ### Fora de escopo
 
@@ -61,17 +76,17 @@ Antivírus avançado, autenticação e parecer jurídico.
 
 ### Questões abertas
 
-Tamanho máximo, formatos de imagem e política de retenção: `PENDING_BUSINESS_VALIDATION`/configuração operacional.
+Tamanho máximo, formatos de imagem além de JPG e PNG e política de retenção: `PENDING_BUSINESS_VALIDATION`/configuração operacional.
 
 ### Testes futuros
 
-Unitários de validação; contrato multipart; integração com Storage fake; teste de publicação pós-persistência; teste de idempotência.
+Unitários de validação (incluindo DOCX válido, corrompido, com senha e renomeado); contrato multipart; integração com Storage fake; teste de publicação pós-persistência; teste de idempotência.
 
 ## SPEC-002 — Armazenamento
 
 ### Objetivo e contexto
 
-Persistir original no Firebase Storage e metadados no Firestore com chave estável.
+Persistir o original (PDF, imagem ou DOCX) no armazenamento de arquivos e os metadados no Firestore com chave estável.
 
 ### Comportamento, entradas e saídas
 
@@ -83,7 +98,7 @@ Portas `BlobStorage`/`DocumentRepository`, adapters Firebase e transação/compe
 
 ### Regras e erros
 
-Calcular checksum; não expor URL pública por padrão; atualizar status de modo monotônico; sanitizar filename. Erros: `STORAGE_UNAVAILABLE`, `METADATA_WRITE_FAILED`, `CHECKSUM_FAILED`.
+Calcular checksum; não expor URL pública por padrão; atualizar status de modo monotônico; sanitizar filename. A extensão da chave (`pdf`, `png`, `jpg`, `docx`) vem do tipo detectado, não do nome enviado. O `content_type` gravado é o detectado. Erros: `STORAGE_UNAVAILABLE`, `METADATA_WRITE_FAILED`, `CHECKSUM_FAILED`.
 
 ### Critérios de aceite
 
@@ -91,6 +106,7 @@ Calcular checksum; não expor URL pública por padrão; atualizar status de modo
 - `storage_key` não depende de nome fornecido pelo usuário.
 - Falha após upload é registrada e recuperável.
 - Nenhum segredo aparece em metadados ou logs.
+- DOCX é guardado com `content_type` de DOCX e recuperado byte a byte igual ao enviado.
 
 ### Fora de escopo
 
@@ -98,7 +114,7 @@ Versionamento de arquivos pelo usuário e edição do original.
 
 ### Questões abertas
 
-Retenção, criptografia adicional e limite de páginas: `PENDING_BUSINESS_VALIDATION`.
+Retenção, criptografia adicional e limite de páginas (para DOCX, limite de blocos): `PENDING_BUSINESS_VALIDATION`.
 
 ### Testes futuros
 
@@ -120,7 +136,7 @@ Entrada: evento e documento armazenado. Saída: `DocumentProcessingStarted`, `Ex
 
 ### Regras e erros
 
-Transições válidas: `UPLOADED → PROCESSING → EXTRACTING → VALIDATING → COMPLETED/FAILED`; reexecução de evento já processado é no-op ou retorna estado atual. `max_attempts` finito.
+Transições válidas: `UPLOADED → PROCESSING → EXTRACTING → VALIDATING → COMPLETED/FAILED`. O caminho é o mesmo para PDF, imagem e DOCX; muda só o método de leitura na extração (SPEC-004). Reexecução de evento já processado é no-op ou retorna estado atual. `max_attempts` finito.
 
 ### Critérios de aceite
 
@@ -128,6 +144,7 @@ Transições válidas: `UPLOADED → PROCESSING → EXTRACTING → VALIDATING �
 - Documento inexistente gera falha clara, não exceção silenciosa.
 - Retry não cria jobs paralelos para o mesmo `processing_id`.
 - Estado final é consultável por endpoint de status.
+- DOCX percorre os mesmos estados de um PDF.
 
 ### Fora de escopo
 
@@ -145,7 +162,7 @@ Máquina de estados; duplicação de evento; crash simulado; limites de retry.
 
 ### Objetivo e contexto
 
-Extrair evidências de PDF ou imagem por leitura nativa e, quando necessário, OCR multimodal com Gemini, por meio do `AIOrchestrator` (documento 3, prompts 2 e 3).
+Extrair evidências de PDF, imagem ou DOCX. PDF usa leitura nativa e, quando necessário, OCR multimodal com Gemini. Imagem usa OCR multimodal. DOCX usa somente leitura local do texto, nunca OCR. A IA é chamada por meio do `AIOrchestrator` (documento 3, prompts 2 e 3).
 
 ### Comportamento, entradas e saídas
 
@@ -157,14 +174,23 @@ Entrada: `document_id`, bytes/contexto, schema e `prompt_version`. Saída: `Extr
 
 ### Regras e erros
 
-Não inventar; preservar ausência, ambiguidade, conflitos, tabelas, numeração de cláusulas, valores, datas, limites, exclusões e condições precedentes. Usar leitura nativa quando houver camada de texto e OCR multimodal para PDF digitalizado ou imagem. OCR ilegível ou inconsistente gera evidência de baixa confiança, nunca texto completado. Resposta inválida não vira apólice. Timeout/429/5xx têm retry limitado. Erros: `INVALID_MODEL_OUTPUT`, `EXTRACTION_TIMEOUT`, `MODEL_UNAVAILABLE`, `SCHEMA_VALIDATION_FAILED`, `LOW_OCR_CONFIDENCE` (aviso, não falha).
+Não inventar; preservar ausência, ambiguidade, conflitos, tabelas, numeração de cláusulas, valores, datas, limites, exclusões e condições precedentes. Usar leitura nativa quando houver camada de texto e OCR multimodal para PDF digitalizado ou imagem. OCR ilegível ou inconsistente gera evidência de baixa confiança, nunca texto completado. Resposta inválida não vira apólice. Timeout/429/5xx têm retry limitado.
+
+**DOCX.** O texto é lido localmente, sem OCR e sem enviar o arquivo ao modelo como imagem. Entram, na ordem em que aparecem no documento: parágrafos, títulos, listas, tabelas, cabeçalhos e rodapés. O texto lido segue para a mesma extração e normalização do PDF. `extraction_method` da evidência é `NATIVE`, com confiança de leitura alta; a incerteza do modelo continua registrada.
+
+**Origem estável da evidência em DOCX.** DOCX não tem páginas fixas: a paginação depende do programa que abre o arquivo. Por isso a evidência guarda a origem por seção/bloco (título da seção e posição do bloco no documento) e só usa página quando houver quebra de página explícita no arquivo. A origem é a mesma toda vez que o mesmo arquivo é lido. Formato exato do campo: pendente de confirmação (backend-specialist).
+
+Erros: `INVALID_MODEL_OUTPUT`, `EXTRACTION_TIMEOUT`, `MODEL_UNAVAILABLE`, `SCHEMA_VALIDATION_FAILED`, `LOW_OCR_CONFIDENCE` (aviso, não falha). Documento corrompido ou protegido por senha que só seja percebido na leitura falha com `INVALID_FILE` e mensagem específica (SPEC-001).
 
 ### Critérios de aceite
 
 - Modelo é chamado apenas pela orquestração.
 - Resultado registra modelo, prompt, tokens, latência e tentativa.
-- Cada campo preenchido tem evidência (página, seção/cláusula quando houver, método e confiança) ou é rejeitado.
-- PDF pesquisável, PDF digitalizado e imagem são processados; todas as páginas são contabilizadas.
+- Cada campo preenchido tem evidência (origem, seção/cláusula quando houver, método e confiança) ou é rejeitado. A origem é a página (PDF, imagem) ou a seção/bloco (DOCX).
+- PDF pesquisável, PDF digitalizado, imagem e DOCX são processados; todas as páginas (ou, no DOCX, todos os blocos) são contabilizadas.
+- DOCX nunca aciona OCR. O texto de parágrafos, títulos, listas, tabelas, cabeçalhos e rodapés aparece nas evidências, na ordem do documento.
+- Duas leituras do mesmo DOCX geram as mesmas origens de evidência.
+- Comparações PDF × PDF, DOCX × DOCX e PDF × DOCX funcionam com o mesmo resultado esperado para o mesmo conteúdo.
 - Evidência de baixa confiança aparece com `BROKER_GUIDANCE`.
 - Injection no PDF não altera instruções do sistema.
 - Ao exceder retries, status é `FAILED` com `retryable` correto.
@@ -175,11 +201,11 @@ Vínculo a conceitos (SPEC-015), pontuação (SPEC-016) e aconselhamento jurídi
 
 ### Questões abertas
 
-Limite de páginas/tokens e política de retenção do raw response.
+Limite de páginas/tokens (e de blocos no DOCX) e política de retenção do raw response. Formato exato da origem da evidência em DOCX: pendente de confirmação.
 
 ### Testes futuros
 
-Mocks, golden datasets, respostas truncadas, conflitos, documentos extensos e injection.
+Mocks, golden datasets (incluindo o mesmo conteúdo em PDF e em DOCX), DOCX com tabela, cabeçalho, rodapé e quebra de página, respostas truncadas, conflitos, documentos extensos e injection.
 
 ## SPEC-005 — Persistência da apólice
 
@@ -282,6 +308,7 @@ IDs distintos, existentes e `STORED`; a ordem A/B deve ser preservada, mas não 
 - API rejeita zero, uma ou mais de duas policies.
 - Policy falha não inicia comparação.
 - A e B permanecem identificáveis no resultado.
+- Na interface, a escolha é feita em dois slots grandes (A e B). Detalhes em SPEC-010.
 
 ### Fora de escopo
 
@@ -384,16 +411,70 @@ Menu fixo com cinco itens — barra inferior no celular, barra lateral a partir 
 | Item | Rota | Conteúdo |
 |---|---|---|
 | Início | `#/` | chamada principal, “Nova comparação”, “Adicionar apólice”, última comparação, como funciona e aviso ao corretor |
-| Apólices | `#/apolices`, `#/apolices/nova`, `#/apolices/{id}` | apólices com seus documentos agrupados, status de processamento, alertas, upload de vários arquivos com tipo de documento e evidências por conceito |
-| Comparar | `#/comparar`, `#/comparar/{id}` | seleção de Apólice 01/02 e perfil; resultado em abas Resumo, Conceitos, Perfis e Qualidade |
+| Apólices | `#/apolices`, `#/apolices/nova`, `#/apolices/{id}` | apólices com seus documentos agrupados, status de processamento, alertas, envio de vários arquivos (PDF, JPG, PNG, DOCX) com tipo de documento e evidências por conceito |
+| Comparar | `#/comparar`, `#/comparar/{id}` | escolha das duas apólices em dois slots (A e B), perfil em opções avançadas e resultado em ordem fixa |
 | Conceitos | `#/conceitos`, `#/conceitos/{id}` | pergunta em linguagem natural (SPEC-018), catálogo filtrável e onde cada conceito aparece |
 | Histórico | `#/historico` | comparações anteriores, tipo de resultado, scores e repetição das que falharam |
 
 Status de processamento usam azul ou neutro; laranja, vermelho, amarelo, verde e cinza ficam reservados aos resultados da comparação. Não há central de notificações no MVP.
 
+### Identidade visual
+
+Referência: aparência no nível do EasyPay, sem copiar marca. Vale para todas as telas.
+
+| Item | Regra |
+|---|---|
+| Fontes | IBM Plex Sans 500 e 600 (títulos e ênfases); Roboto 400 e 500 (texto e rótulos) |
+| Cores da marca | `#000000`, `#F9EFE5`, `#FFD700` |
+| Cores de base | `#7F8790`, `#8F92A1`, `#F8F8F8` |
+| Cores de notificação e de parecer | Não mudam. Seguem a base de conhecimento, seção 8 |
+| Amarelo da marca (`#FFD700`) | Só como acento (destaque, foco, detalhe). Nunca em selo de resultado |
+| Selos | Sempre com ícone e texto. Cor nunca é o único sinal |
+| Slots A e B | Preto e cinza, com a letra A ou B visível |
+| Navegação | Barra inferior no celular; barra lateral a partir de 1024 px |
+
+### Envio de documentos
+
+- Cada arquivo é validado ao ser escolhido, antes do envio. O erro aparece em português, junto do arquivo com problema, e diz o que fazer (por exemplo: "O arquivo está protegido por senha. Envie uma cópia sem senha.").
+- Um arquivo com erro não impede os demais de seguirem.
+- O tipo do documento é detectado e editável. A tela mostra "Detectamos: Apólice" com opção de trocar.
+- Formatos aceitos aparecem antes da escolha: PDF, JPG, PNG e DOCX.
+
+### Processamento
+
+O usuário vê 3 passos, em linguagem simples:
+
+| Passo | Estado interno (SPEC-003) |
+|---|---|
+| Recebido | `UPLOADED` |
+| Lendo | `PROCESSING`, `EXTRACTING` |
+| Conferindo | `VALIDATING` |
+
+- A tela avisa que pode levar alguns minutos e que dá para sair e voltar.
+- Falha de rede durante o acompanhamento mostra mensagem clara, mantém o que já foi enviado e oferece o botão **Reenviar**.
+- Falha do documento mostra o motivo em português e a ação possível, sem detalhes técnicos.
+
+### Escolha das apólices
+
+- Duas áreas grandes, os slots A e B. Cada uma mostra a apólice escolhida ou convida a escolher.
+- Apólice em processamento aparece desabilitada, com o motivo escrito ("Ainda sendo lida").
+- O botão **Comparar** fica indisponível enquanto faltar algo e diz o que falta ("Escolha a apólice B").
+- Perfil de risco fica em opções avançadas. O padrão é Base.
+
+### Ordem do resultado
+
+A ordem é fixa, de cima para baixo:
+
+1. Conclusão em uma frase.
+2. Dois placares, Aderência e Completude, cada um com uma linha de explicação.
+3. Vantagens e pontos de atenção de cada apólice.
+4. **Ver cálculo**, recolhido por padrão. Reúne a tabela por conceito, os perfis e o checklist de qualidade.
+
+A frase "Consulte seu corretor de seguros." fica sempre visível, em qualquer estado do resultado.
+
 ### Comportamento, entradas e saídas
 
-Entrada: response de comparison. UI exibe documentos processados, qualidade da extração, seletor de Apólice 01/02, filtro por nível de importância, seletor de perfil de risco, tabela com uma linha por conceito (colunas do prompt 15, incluindo peso, Resultado-base, Fator de Ajuste, pontos e parecer), Score de Aderência, Índice de Completude, indicador comparativo, resumo executivo, evidência literal com fonte/cláusula/página e alertas.
+Entrada: response de comparison. UI exibe a ordem fixa acima. Em "Ver cálculo": documentos processados, qualidade da extração, filtro por nível de importância, seletor de perfil de risco, tabela com uma linha por conceito (colunas do prompt 15, incluindo peso, Resultado-base, Fator de Ajuste, pontos e parecer), Score de Aderência, Índice de Completude, indicador comparativo, resumo executivo, evidência literal com fonte/cláusula e página (ou seção/bloco, em DOCX) e alertas.
 
 ### Dependências
 
@@ -401,17 +482,24 @@ React, TypeScript, SCSS, API client e contratos de response.
 
 ### Regras e erros
 
-Não esconder `UNKNOWN`, `NOT_COMPARABLE`, `INCONCLUSIVE` ou `PENDING_BUSINESS_VALIDATION`; separar visualmente evidência, avaliação, pontuação e recomendação; usar as cores da base de conhecimento sempre acompanhadas de rótulo; não usar verde para mera menção em Condições Gerais; percentuais com uma casa decimal; exibir “Consulte seu corretor de seguros.” onde houver limitação; polling para em estados finais.
+Não esconder `UNKNOWN`, `NOT_COMPARABLE`, `INCONCLUSIVE` ou `PENDING_BUSINESS_VALIDATION`; separar visualmente evidência, avaliação, pontuação e recomendação; usar as cores da base de conhecimento sempre acompanhadas de rótulo e ícone; não usar verde para mera menção em Condições Gerais; percentuais com uma casa decimal; exibir “Consulte seu corretor de seguros.” onde houver limitação; polling para em estados finais.
 
 ### Critérios de aceite
 
-- Usuário sabe qual policy é A/B.
+- Usuário sabe qual policy é A/B (slots com a letra, em preto e cinza).
 - Itens têm conceito, peso, valores, pontos, parecer e evidência quando disponível.
 - Filtro por importância e troca de perfil não alteram os pesos-base exibidos.
 - Recomendação `CONDITIONED` é visualmente distinta de `TECHNICAL`.
 - Loading/erro/resultado parcial são estados explícitos.
 - Alvos de toque têm pelo menos 44 px e nenhuma tela rola na horizontal a partir de 320 px.
 - Layout é utilizável em viewport definido pelo MVP e tem acessibilidade básica.
+- Fontes e cores seguem a tabela de identidade visual; cores de notificação e de parecer ficam iguais às da base de conhecimento.
+- Nenhum selo de resultado usa o amarelo da marca; todo selo tem ícone e texto.
+- Menu é inferior no celular e lateral a partir de 1024 px.
+- Erro de envio aparece junto do arquivo, em português; o tipo do documento é editável.
+- O processamento mostra os 3 passos, o aviso de tempo e, em falha de rede, o botão Reenviar.
+- Apólice em processamento está desabilitada nos slots, com motivo; **Comparar** indisponível diz o que falta.
+- Resultado segue a ordem fixa; "Ver cálculo" começa recolhido; "Consulte seu corretor de seguros." está sempre visível.
 
 ### Fora de escopo
 
@@ -419,11 +507,11 @@ Exportação PDF, dashboard analítico e edição de dados/pesos pelo usuário.
 
 ### Questões abertas
 
-Design visual, paginação da tabela e idioma final.
+Paginação da tabela e idioma final. Disposição final de "Ver cálculo" (abas ou seções): pendente de confirmação com o frontend.
 
 ### Testes futuros
 
-Componentes, contrato com fixtures, acessibilidade e estados de erro.
+Componentes, contrato com fixtures, acessibilidade (contraste do texto sobre `#F9EFE5` e `#FFD700`), estados de erro e de rede e teclado nos slots.
 
 ## SPEC-011 — Tratamento de falhas
 
@@ -737,12 +825,13 @@ Repositories, `ScoringService`.
 
 ### Regras e erros
 
-Verificar: arquivos lidos, OCR e confiança, páginas processadas, classificação de documentos, página e cláusula nas evidências, todos os conceitos ponderados pesquisados, mesmos critérios nas duas apólices, contratação separada de presença, ausência separada de exclusão, pesos preservados, cálculos corretos, limites e prazos em bases equivalentes, completude calculada, críticos inconclusivos destacados, recomendação compatível com evidências e orientação ao usuário. Verificação negativa gera correção ou limitação explícita com `BROKER_GUIDANCE`.
+Verificar: arquivos lidos, OCR e confiança (não se aplica a DOCX, que nunca usa OCR), páginas processadas (no DOCX, seções/blocos lidos), classificação de documentos, página e cláusula nas evidências, todos os conceitos ponderados pesquisados, mesmos critérios nas duas apólices, contratação separada de presença, ausência separada de exclusão, pesos preservados, cálculos corretos, limites e prazos em bases equivalentes, completude calculada, críticos inconclusivos destacados, recomendação compatível com evidências e orientação ao usuário. Verificação negativa gera correção ou limitação explícita com `BROKER_GUIDANCE`.
 
 ### Critérios de aceite
 
 - Resultado nunca é exibido como completo com verificação negativa oculta.
-- O checklist aparece na API e pode ser mostrado na UI.
+- O checklist aparece na API e pode ser mostrado na UI, dentro de "Ver cálculo".
+- Para DOCX, a verificação de OCR é marcada como não aplicável, não como falha.
 
 ### Fora de escopo
 

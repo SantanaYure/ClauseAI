@@ -47,7 +47,7 @@ Providers concretos implementam uma interface pequena (`complete_structured`, `c
 flowchart LR
     D[Documento armazenado] --> I[Classificação P-INTAKE-001]
     I --> P{Tem camada de texto?}
-    P -- sim --> NT[Leitura nativa do PDF]
+    P -- sim --> NT[Leitura nativa do PDF ou DOCX]
     P -- não/parcial --> G[Gemini multimodal / OCR]
     NT --> G
     G --> R[Resposta recebida]
@@ -60,7 +60,7 @@ flowchart LR
     NM --> PS[PolicyStructured + ConceptOccurrence]
 ```
 
-A leitura nativa (biblioteca de PDF na infraestrutura) é usada quando há camada de texto; o texto nativo acompanha as páginas enviadas ao Gemini para reduzir erro de OCR. PDFs digitalizados e imagens usam somente a leitura multimodal. Cada evidência registra `extraction_method` e `confidence`; confiança abaixo do limiar configurado marca `low_confidence=true` e dispara `BROKER_GUIDANCE`. Um adaptador de OCR dedicado (por exemplo, Tesseract) pode ser acrescentado atrás da mesma porta se os golden datasets mostrarem necessidade.
+A leitura nativa (biblioteca de PDF na infraestrutura) é usada quando há camada de texto; o texto nativo acompanha as páginas enviadas ao Gemini para reduzir erro de OCR. PDFs digitalizados e imagens usam somente a leitura multimodal. DOCX é lido localmente (parágrafos, títulos, listas, tabelas, cabeçalhos e rodapés, na ordem do documento) e nunca passa por OCR; o texto lido segue como texto nativo, e a origem de cada evidência é a seção/bloco (ou quebra de página explícita), pois DOCX não tem páginas fixas. Cada evidência registra `extraction_method` e `confidence`; confiança abaixo do limiar configurado marca `low_confidence=true` e dispara `BROKER_GUIDANCE`. Um adaptador de OCR dedicado (por exemplo, Tesseract) pode ser acrescentado atrás da mesma porta se os golden datasets mostrarem necessidade.
 
 ### Comportamentos obrigatórios
 

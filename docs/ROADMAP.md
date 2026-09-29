@@ -62,7 +62,7 @@ Sequência recomendada para uma pessoa. Cada fase só avança quando sua defini�
 
 - **Objetivo:** obter JSON rastreável de documentos reais.
 - **Dependências:** Fases 3, 5 e 6; acesso aos providers.
-- **Entregável:** AI Orchestrator, leitor de PDF nativo, Gemini adapter (OCR multimodal), `P-INTAKE-001`, `P-EXTRACT-001`, `P-NORMALIZE-001`, schema v1, retries, `ExtractionResult`, `Evidence` e `ConceptOccurrence`.
+- **Entregável:** AI Orchestrator, leitor de PDF nativo (DOCX em I-01), Gemini adapter (OCR multimodal), `P-INTAKE-001`, `P-EXTRACT-001`, `P-NORMALIZE-001`, schema v1, retries, `ExtractionResult`, `Evidence` e `ConceptOccurrence`.
 - **Definition of Done:** golden fixtures produzem payload validado ou falha explícita; PDF pesquisável, PDF digitalizado e imagem cobertos; injection, ausência e Condições Gerais isoladas cobertas; os 31 conceitos ponderados são pesquisados.
 - **Pode ser mockado:** Gemini em unit/integration; respostas reais só em testes controlados.
 - **Equipe de seguros:** revisar variantes de DO-036 a DO-044.
@@ -138,6 +138,17 @@ Sequência recomendada para uma pessoa. Cada fase só avança quando sua defini�
 - **Definition of Done:** checklist “entrega completa” do enunciado atendido até 06/10/2026, 23h59.
 - **Pode ser mockado:** nada.
 - **Equipe de seguros:** revisão final do relatório.
+
+## Incrementos pós-MVP
+
+Estados: `Documentado` (spec e ADR prontos), `Em andamento`, `Concluído`. Só marcar `Concluído` depois da validação do `qa`.
+
+| ID | Incremento | Referências | Estado |
+|---|---|---|---|
+| I-01 | Suporte a DOCX: detecção por conteúdo, leitura local sem OCR, origem estável da evidência (seção/bloco), erros classificados, comparação PDF × DOCX | ADR-024; SPEC-001 a SPEC-004 | Documentado. Backend em andamento. Pendente: formato exato da origem da evidência |
+| I-02 | Remake visual e identidade de marca: fontes, cores, selos, navegação, envio com validação, processamento em 3 passos, slots A e B, resultado em ordem fixa | ADR-025; SPEC-007, SPEC-010, SPEC-019 | Documentado. Frontend em andamento. Pendente: disposição final de "Ver cálculo" |
+
+Definição de pronto: critérios de aceite das specs citadas passam, incluindo uma comparação PDF × DOCX ponta a ponta e a revisão de contraste da nova paleta.
 
 ## Priorização de backlog futuro
 

@@ -25,6 +25,7 @@ ClauseAI/
 │   │   │   │   ├── gemini_client.py  # cliente único: extração, avaliação e conclusão
 │   │   │   │   └── prompts/       # P-SYSTEM, P-INTAKE, P-EXTRACT, P-NORMALIZE, P-ASSESS, P-EXECUTIVE, P-QUERY
 │   │   │   ├── pdf/               # leitura nativa de PDF
+│   │   │   ├── word/              # leitura local de DOCX, sem OCR
 │   │   │   ├── knowledge_base/    # seed e leitura versionada do catálogo e pesos
 │   │   │   └── event_bus/
 │   │   ├── presentation/

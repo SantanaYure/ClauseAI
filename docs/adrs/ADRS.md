@@ -208,3 +208,21 @@ Status permitido: `Accepted`, `Proposed`, `Superseded`. ADRs registram decisões
 - **Alternativas:** Groq no plano pago (Dev Tier); outro provedor para a avaliação.
 - **Consequências:** uma chave, uma integração e comparações mais rápidas; perde-se a separação entre o modelo que extrai e o que avalia.
 - **Riscos:** o mesmo modelo lê e avalia, e pode repetir um erro de leitura na avaliação. Mitigado pelas travas determinísticas, pela exigência de evidência literal e pelo Quality Gate. O limite de uso do Gemini segue tratado com espera pelo tempo pedido (HTTP 429).
+
+## ADR-024 — Suporte a DOCX com leitura local
+
+- **Status:** Accepted (complementa o ADR-019)
+- **Contexto/problema:** apólices reais chegam também em Word. O sistema só aceitava PDF e imagem, e a comparação misturando formatos não era possível.
+- **Decisão:** aceitar DOCX, detectado pelo conteúdo (zip com `[Content-Types].xml` e `word/document.xml`). O texto é lido localmente, nunca por OCR, na ordem do documento: parágrafos, títulos, listas, tabelas, cabeçalhos e rodapés. A evidência tem origem estável por seção/bloco, ou por quebra de página explícita, pois DOCX não tem páginas fixas. Comparações PDF × PDF, DOCX × DOCX e PDF × DOCX usam o mesmo pipeline. Erros de arquivo corrompido, protegido por senha e tipo não suportado mantêm os códigos `INVALID_FILE` e `UNSUPPORTED_MEDIA_TYPE`, com detalhe na mensagem.
+- **Alternativas:** converter DOCX em PDF e usar OCR; enviar o DOCX ao modelo como arquivo.
+- **Consequências:** texto exato, sem erro de OCR, e sem custo de modelo na leitura; um adapter novo na infraestrutura; a origem da evidência deixa de ser sempre uma página.
+- **Riscos:** o mesmo conteúdo em PDF e em DOCX gerar origens diferentes; mitigado por golden datasets com os dois formatos. Formato exato da origem em DOCX: pendente de confirmação do backend.
+
+## ADR-025 — Remake visual e identidade de marca
+
+- **Status:** Accepted
+- **Contexto/problema:** a interface precisa de aparência de produto, com hierarquia clara e menos esforço do usuário, na linha de Don Norman (visibilidade, feedback, prevenção de erro).
+- **Decisão:** adotar a identidade da SPEC-010: IBM Plex Sans 500/600 e Roboto 400/500; marca `#000000`, `#F9EFE5` e `#FFD700`; base `#7F8790`, `#8F92A1` e `#F8F8F8`. As cores de notificação e de parecer não mudam. O amarelo da marca é só acento, nunca selo de resultado. Selos têm ícone e texto. Menu inferior no celular e lateral em telas largas. Envio com validação por arquivo, processamento em 3 passos (Recebido, Lendo, Conferindo), escolha das apólices em dois slots (A e B), perfil de risco em opções avançadas e resultado em ordem fixa: conclusão, dois placares, vantagens e atenção, "Ver cálculo" recolhido. "Consulte seu corretor de seguros." sempre visível.
+- **Alternativas:** manter o visual anterior; usar a paleta de resultado também na marca.
+- **Consequências:** interface consistente e mais simples de entender; o cálculo continua acessível, mas fora do caminho principal.
+- **Riscos:** contraste baixo do texto sobre `#F9EFE5` e `#FFD700`, e confusão entre o amarelo da marca e o de parecer; mitigados por teste de acessibilidade e pela regra de ícone e texto em todo selo.
