@@ -105,38 +105,56 @@ def _optional_text(c: Clauses, names: list[str]) -> None:
 def _cover(spec: Spec) -> list[Block]:
     v = spec.vocab
     return [
-        Block("title", "APÓLICE DE SEGURO DE RESPONSABILIDADE CIVIL DE ADMINISTRADORES E "
-              "DIRETORES (D&O)"),
-        Block("subtitle", f"{spec.insurer} – CNPJ {spec.insurer_cnpj} – Código SUSEP "
-              f"{spec.insurer_susep}"),
+        Block(
+            "title",
+            "APÓLICE DE SEGURO DE RESPONSABILIDADE CIVIL DE ADMINISTRADORES E DIRETORES (D&O)",
+        ),
+        Block(
+            "subtitle",
+            f"{spec.insurer} – CNPJ {spec.insurer_cnpj} – Código SUSEP {spec.insurer_susep}",
+        ),
         Block("p", f"{spec.insurer_address}. Ouvidoria: {spec.ouvidoria}."),
-        Block("table", table=Table(
-            ("Campo", "Informação"),
-            (
-                ("Apólice nº", spec.apolice),
-                ("Proposta nº", spec.proposta),
-                ("Processo SUSEP nº", f"{spec.processo} (fictício)"),
-                ("Ramo / Modalidade", "0351 – Responsabilidade Civil de Administradores e "
-                 "Diretores (D&O) – base de reclamações (claims made) com notificação"),
-                ("Data de emissão", spec.emissao),
-                ("Vigência", f"Das 24h de {spec.vig_ini} às 24h de {spec.vig_fim}"),
-                (f"{v.T} / Segurado principal", f"{spec.tomador} – CNPJ {spec.tomador_cnpj}"),
-                ("Endereço", spec.tomador_address),
-                ("Atividade", spec.tomador_profile),
-                ("Corretor de seguros", f"{spec.corretor} – SUSEP nº {spec.corretor_susep} "
-                 "(fictício)"),
+        Block(
+            "table",
+            table=Table(
+                ("Campo", "Informação"),
+                (
+                    ("Apólice nº", spec.apolice),
+                    ("Proposta nº", spec.proposta),
+                    ("Processo SUSEP nº", f"{spec.processo} (fictício)"),
+                    (
+                        "Ramo / Modalidade",
+                        "0351 – Responsabilidade Civil de Administradores e "
+                        "Diretores (D&O) – base de reclamações (claims made) com notificação",
+                    ),
+                    ("Data de emissão", spec.emissao),
+                    ("Vigência", f"Das 24h de {spec.vig_ini} às 24h de {spec.vig_fim}"),
+                    (f"{v.T} / Segurado principal", f"{spec.tomador} – CNPJ {spec.tomador_cnpj}"),
+                    ("Endereço", spec.tomador_address),
+                    ("Atividade", spec.tomador_profile),
+                    (
+                        "Corretor de seguros",
+                        f"{spec.corretor} – SUSEP nº {spec.corretor_susep} (fictício)",
+                    ),
+                ),
+                (0.32, 0.68),
             ),
-            (0.32, 0.68),
-        )),
-        Block("p", f"A Seguradora, em contraprestação ao prêmio e com base nas declarações "
-              f"prestadas na proposta, garante ao {v.T} e aos {v.S_pl} as coberturas contratadas "
-              "indicadas nas Condições Particulares, nos termos destas Condições Gerais e dos "
-              "endossos emitidos, observada a Circular SUSEP nº 637, de 27 de julho de 2021, e "
-              "os arts. 757 a 802 do Código Civil (Lei nº 10.406/2002)."),
-        Block("note", "Documento fictício, criado exclusivamente para testes do ClauseAI. As "
-              "empresas, números, processos e pessoas citados não existem e o texto não tem "
-              "valor contratual. O registro do produto na SUSEP é automático e não representa "
-              "aprovação ou recomendação por parte da autarquia."),
+        ),
+        Block(
+            "p",
+            f"A Seguradora, em contraprestação ao prêmio e com base nas declarações "
+            f"prestadas na proposta, garante ao {v.T} e aos {v.S_pl} as coberturas contratadas "
+            "indicadas nas Condições Particulares, nos termos destas Condições Gerais e dos "
+            "endossos emitidos, observada a Circular SUSEP nº 637, de 27 de julho de 2021, e "
+            "os arts. 757 a 802 do Código Civil (Lei nº 10.406/2002).",
+        ),
+        Block(
+            "note",
+            "Documento fictício, criado exclusivamente para testes do ClauseAI. As "
+            "empresas, números, processos e pessoas citados não existem e o texto não tem "
+            "valor contratual. O registro do produto na SUSEP é automático e não representa "
+            "aprovação ou recomendação por parte da autarquia.",
+        ),
     ]
 
 
@@ -174,55 +192,83 @@ def _summary(spec: Spec) -> list[Block]:
     per = total // spec.parcelas
     blocks: list[Block] = [
         Block("h1", "SEÇÃO I – CONDIÇÕES PARTICULARES E QUADRO RESUMO"),
-        Block("p", f"Apólice nº {spec.apolice} · {v.T}: {spec.tomador}. Somente as coberturas "
-              "indicadas como Contratada estão em vigor. As coberturas Não contratadas ou "
-              "Excluídas não geram direito a indenização, ainda que mencionadas nas Condições "
-              "Gerais."),
-        Block("table", table=Table(
-            ("Item", "Condição"),
-            (
-                (f"{v.L} ({v.L_abbr})",
-                 f"{brl(spec.lmg)} por vigência, em base agregada, para todas as Coberturas, "
-                 "Perdas e Custos de Defesa, salvo quando indicado em contrário."),
-                ("Limite adicional exclusivo da Cobertura A (DIC)",
-                 f"{brl(spec.side_a_dic)}, disponível apenas ao {v.S} após o esgotamento do "
-                 f"{v.L_abbr}." if spec.side_a_dic else "Não contratado."),
-                ("Moeda", "Real (R$). Reclamações em moeda estrangeira serão convertidas "
-                 "pela taxa PTAX de venda do Banco Central do Brasil na data do pagamento."),
-                ("Prêmio líquido", brl(net)),
-                ("IOF (7,38%)", brl(iof)),
-                ("Prêmio total", f"{brl(total)}, em {spec.parcelas} parcelas mensais de "
-                 f"{brl(per)}"),
+        Block(
+            "p",
+            f"Apólice nº {spec.apolice} · {v.T}: {spec.tomador}. Somente as coberturas "
+            "indicadas como Contratada estão em vigor. As coberturas Não contratadas ou "
+            "Excluídas não geram direito a indenização, ainda que mencionadas nas Condições "
+            "Gerais.",
+        ),
+        Block(
+            "table",
+            table=Table(
+                ("Item", "Condição"),
+                (
+                    (
+                        f"{v.L} ({v.L_abbr})",
+                        f"{brl(spec.lmg)} por vigência, em base agregada, para todas as Coberturas, "
+                        "Perdas e Custos de Defesa, salvo quando indicado em contrário.",
+                    ),
+                    (
+                        "Limite adicional exclusivo da Cobertura A (DIC)",
+                        f"{brl(spec.side_a_dic)}, disponível apenas ao {v.S} após o esgotamento do "
+                        f"{v.L_abbr}."
+                        if spec.side_a_dic
+                        else "Não contratado.",
+                    ),
+                    (
+                        "Moeda",
+                        "Real (R$). Reclamações em moeda estrangeira serão convertidas "
+                        "pela taxa PTAX de venda do Banco Central do Brasil na data do pagamento.",
+                    ),
+                    ("Prêmio líquido", brl(net)),
+                    ("IOF (7,38%)", brl(iof)),
+                    (
+                        "Prêmio total",
+                        f"{brl(total)}, em {spec.parcelas} parcelas mensais de {brl(per)}",
+                    ),
+                ),
+                (0.34, 0.66),
+                caption="Quadro 0 – Limite, moeda e prêmio",
             ),
-            (0.34, 0.66),
-            caption="Quadro 0 – Limite, moeda e prêmio",
-        )),
+        ),
         Block("table", table=_limits_table(spec)),
-        Block("table", table=Table(
-            ("Item", "Condição"),
-            (
-                ("Cobertura A", spec.franquia_a),
-                ("Cobertura B e adicionais", spec.franquia_b),
-                ("Cobertura C", spec.franquia_c),
-                ("Participação obrigatória do Segurado", spec.participacao),
+        Block(
+            "table",
+            table=Table(
+                ("Item", "Condição"),
+                (
+                    ("Cobertura A", spec.franquia_a),
+                    ("Cobertura B e adicionais", spec.franquia_b),
+                    ("Cobertura C", spec.franquia_c),
+                    ("Participação obrigatória do Segurado", spec.participacao),
+                ),
+                (0.34, 0.66),
+                caption="Quadro 2 – Franquias, retenção e participação obrigatória",
             ),
-            (0.34, 0.66),
-            caption="Quadro 2 – Franquias, retenção e participação obrigatória",
-        )),
-        Block("table", table=Table(
-            ("Categoria de Segurado", "Abrangência"),
-            spec.insureds,
-            (0.34, 0.66),
-            caption="Quadro 3 – Segurados",
-        )),
+        ),
+        Block(
+            "table",
+            table=Table(
+                ("Categoria de Segurado", "Abrangência"),
+                spec.insureds,
+                (0.34, 0.66),
+                caption="Quadro 3 – Segurados",
+            ),
+        ),
     ]
     if spec.subsidiaries:
-        blocks.append(Block("table", table=Table(
-            ("Subsidiária", "Participação / país"),
-            spec.subsidiaries,
-            (0.6, 0.4),
-            caption="Quadro 4 – Subsidiárias cobertas",
-        )))
+        blocks.append(
+            Block(
+                "table",
+                table=Table(
+                    ("Subsidiária", "Participação / país"),
+                    spec.subsidiaries,
+                    (0.6, 0.4),
+                    caption="Quadro 4 – Subsidiárias cobertas",
+                ),
+            )
+        )
     blocks.append(Block("table", table=_terms_table(spec)))
     return blocks
 
@@ -259,13 +305,19 @@ def _terms_table(spec: Spec) -> Table:
     rows += [
         ("Âmbito territorial", spec.territory),
         ("Jurisdição", spec.jurisdiction),
-        ("Notificação de circunstâncias",
-         f"Até {spec.notice_days} ({spec.notice_days}) dias após o conhecimento do fato ou "
-         "circunstância, e sempre até o fim do prazo complementar."),
+        (
+            "Notificação de circunstâncias",
+            f"Até {spec.notice_days} ({spec.notice_days}) dias após o conhecimento do fato ou "
+            "circunstância, e sempre até o fim do prazo complementar.",
+        ),
         ("Foro / solução de disputas", _forum_summary(spec)),
     ]
-    return Table(("Item", "Condição"), tuple(rows), (0.28, 0.72),
-                 caption="Quadro 5 – Retroatividade, prazos, território e notificação")
+    return Table(
+        ("Item", "Condição"),
+        tuple(rows),
+        (0.28, 0.72),
+        caption="Quadro 5 – Retroatividade, prazos, território e notificação",
+    )
 
 
 def _forum_summary(spec: Spec) -> str:
@@ -282,10 +334,11 @@ def _objeto_e_definicoes(c: Clauses) -> None:
         "Este seguro garante, até o {L} ({L_abbr}) indicado na Especificação, o pagamento das "
         "{P} decorrentes de Reclamações apresentadas contra o {S} durante a vigência, o "
         "Prazo Complementar ou o Prazo Suplementar, por {ato} praticado no exercício de suas "
-        "funções no {T} ou em Subsidiária, {retro}."
-    , retro="a partir da data ou do período de retroatividade indicado nas Condições "
-        "Particulares" if s.retro_style != "ilimitada" else "sem limite de data anterior, "
-        "ressalvados os fatos e circunstâncias conhecidos")
+        "funções no {T} ou em Subsidiária, {retro}.",
+        retro="a partir da data ou do período de retroatividade indicado nas Condições Particulares"
+        if s.retro_style != "ilimitada"
+        else "sem limite de data anterior, ressalvados os fatos e circunstâncias conhecidos",
+    )
     c.item(
         "O seguro é contratado na modalidade de base de reclamações (claims made), com "
         "notificação, e rege-se pelas Condições Particulares, por estas Condições Gerais, pelos "
@@ -300,54 +353,108 @@ def _objeto_e_definicoes(c: Clauses) -> None:
 
     c.clause("Definições")
     defs = [
-        ("Apólice", "instrumento que formaliza o contrato, composto pela proposta, Condições "
-                   "Particulares, Condições Gerais e endossos."),
-        ("{T}", "a pessoa jurídica indicada na capa da apólice, que contrata o seguro em favor "
-                "dos {S_pl} e responde pelo pagamento do prêmio."),
-        ("Subsidiária", "sociedade em que o {T} detenha, direta ou indiretamente, mais de "
-                        "50% (cinquenta por cento) do capital votante, ou o poder de eleger "
-                        "a maioria dos administradores, indicada no Quadro 4 ou incluída por "
-                        "endosso."),
-        ("{S}", "as pessoas físicas indicadas no Quadro 3, presentes, passadas ou futuras, que "
-                "exerçam ou tenham exercido cargo de administração, em conselho, comitê "
-                "estatutário ou função de gestão com poderes de representação no {T} ou em "
-                "Subsidiária, inclusive, quando previsto, o espólio e os herdeiros."),
-        ("{ato}", "ato ou omissão culposa, erro, declaração inexata, violação de dever legal, "
-                  "estatutário ou fiduciário, real ou alegado, praticado pelo {S} no "
-                  "exercício de suas funções."),
-        ("Reclamação", "(a) citação ou notificação judicial em ação civil, criminal ou "
-                       "administrativa; (b) pedido escrito de indenização ou reparação; (c) "
-                       "instauração de processo arbitral; (d) Investigação Formal contra o {S}."),
-        ("Sinistro", "toda Reclamação, ou conjunto de Reclamações decorrentes do mesmo {ato} ou "
-                     "de {ato_pl} relacionados, considerado um único Sinistro na data da primeira "
-                     "Reclamação."),
-        ("{P}", "valores que o {S} for obrigado a pagar por decisão judicial, arbitral ou acordo "
-                "aprovado pela Seguradora, inclusive Custos de Defesa, exceto tributos, multas "
-                "e sanções que a lei aplicável proíba segurar, e as demais exclusões desta "
-                "apólice."),
-        ("Custos de Defesa", "honorários advocatícios e periciais, custas judiciais, cauções "
-                             "e demais despesas razoáveis e necessárias à defesa do {S}, "
-                             "aprovadas pela Seguradora."),
-        ("Investigação Formal", "procedimento formal de apuração instaurado por autoridade "
-                                "pública, regulador ou autorregulador, em que o {S} seja "
-                                "intimado ou convocado."),
-        ("Circunstância", "fato ou situação específica, conhecida durante a vigência, que possa "
-                          "razoavelmente originar uma Reclamação."),
-        ("{L} ({L_abbr})", "valor máximo de responsabilidade da Seguradora por todas as {P}, "
-                           "Custos de Defesa e coberturas, na vigência."),
-        ("Franquia", "parcela das {P} que fica a cargo do {T} ou do {S}, deduzida de cada "
-                     "Reclamação, conforme o Quadro 2."),
-        ("Poluentes", "qualquer substância sólida, líquida, gasosa ou térmica irritante ou "
-                      "contaminante, inclusive fumaça, vapor, fuligem, resíduos, rejeitos, "
-                      "agrotóxicos e efluentes."),
-        ("Entidade Externa", "pessoa jurídica sem fins lucrativos, que não seja Subsidiária, em "
-                             "que o {S} ocupe cargo por indicação escrita do {T}."),
-        ("Evento de Crise", "fato que, a juízo razoável do {T}, possa gerar Reclamação relevante "
-                            "ou dano grave à reputação do {T} ou do {S}."),
-        ("Prazo Complementar", "período posterior ao fim da vigência, em que Reclamações por "
-                               "atos anteriores ao término podem ser apresentadas e notificadas."),
-        ("Prazo Suplementar", "extensão contratável do período de apresentação de Reclamações "
-                              "após o fim da vigência, nas condições do Quadro 5."),
+        (
+            "Apólice",
+            "instrumento que formaliza o contrato, composto pela proposta, Condições "
+            "Particulares, Condições Gerais e endossos.",
+        ),
+        (
+            "{T}",
+            "a pessoa jurídica indicada na capa da apólice, que contrata o seguro em favor "
+            "dos {S_pl} e responde pelo pagamento do prêmio.",
+        ),
+        (
+            "Subsidiária",
+            "sociedade em que o {T} detenha, direta ou indiretamente, mais de "
+            "50% (cinquenta por cento) do capital votante, ou o poder de eleger "
+            "a maioria dos administradores, indicada no Quadro 4 ou incluída por "
+            "endosso.",
+        ),
+        (
+            "{S}",
+            "as pessoas físicas indicadas no Quadro 3, presentes, passadas ou futuras, que "
+            "exerçam ou tenham exercido cargo de administração, em conselho, comitê "
+            "estatutário ou função de gestão com poderes de representação no {T} ou em "
+            "Subsidiária, inclusive, quando previsto, o espólio e os herdeiros.",
+        ),
+        (
+            "{ato}",
+            "ato ou omissão culposa, erro, declaração inexata, violação de dever legal, "
+            "estatutário ou fiduciário, real ou alegado, praticado pelo {S} no "
+            "exercício de suas funções.",
+        ),
+        (
+            "Reclamação",
+            "(a) citação ou notificação judicial em ação civil, criminal ou "
+            "administrativa; (b) pedido escrito de indenização ou reparação; (c) "
+            "instauração de processo arbitral; (d) Investigação Formal contra o {S}.",
+        ),
+        (
+            "Sinistro",
+            "toda Reclamação, ou conjunto de Reclamações decorrentes do mesmo {ato} ou "
+            "de {ato_pl} relacionados, considerado um único Sinistro na data da primeira "
+            "Reclamação.",
+        ),
+        (
+            "{P}",
+            "valores que o {S} for obrigado a pagar por decisão judicial, arbitral ou acordo "
+            "aprovado pela Seguradora, inclusive Custos de Defesa, exceto tributos, multas "
+            "e sanções que a lei aplicável proíba segurar, e as demais exclusões desta "
+            "apólice.",
+        ),
+        (
+            "Custos de Defesa",
+            "honorários advocatícios e periciais, custas judiciais, cauções "
+            "e demais despesas razoáveis e necessárias à defesa do {S}, "
+            "aprovadas pela Seguradora.",
+        ),
+        (
+            "Investigação Formal",
+            "procedimento formal de apuração instaurado por autoridade "
+            "pública, regulador ou autorregulador, em que o {S} seja "
+            "intimado ou convocado.",
+        ),
+        (
+            "Circunstância",
+            "fato ou situação específica, conhecida durante a vigência, que possa "
+            "razoavelmente originar uma Reclamação.",
+        ),
+        (
+            "{L} ({L_abbr})",
+            "valor máximo de responsabilidade da Seguradora por todas as {P}, "
+            "Custos de Defesa e coberturas, na vigência.",
+        ),
+        (
+            "Franquia",
+            "parcela das {P} que fica a cargo do {T} ou do {S}, deduzida de cada "
+            "Reclamação, conforme o Quadro 2.",
+        ),
+        (
+            "Poluentes",
+            "qualquer substância sólida, líquida, gasosa ou térmica irritante ou "
+            "contaminante, inclusive fumaça, vapor, fuligem, resíduos, rejeitos, "
+            "agrotóxicos e efluentes.",
+        ),
+        (
+            "Entidade Externa",
+            "pessoa jurídica sem fins lucrativos, que não seja Subsidiária, em "
+            "que o {S} ocupe cargo por indicação escrita do {T}.",
+        ),
+        (
+            "Evento de Crise",
+            "fato que, a juízo razoável do {T}, possa gerar Reclamação relevante "
+            "ou dano grave à reputação do {T} ou do {S}.",
+        ),
+        (
+            "Prazo Complementar",
+            "período posterior ao fim da vigência, em que Reclamações por "
+            "atos anteriores ao término podem ser apresentadas e notificadas.",
+        ),
+        (
+            "Prazo Suplementar",
+            "extensão contratável do período de apresentação de Reclamações "
+            "após o fim da vigência, nas condições do Quadro 5.",
+        ),
     ]
     for term, text in defs:
         c.item(f"“{term}”: {text}", ato_pl="Atos Danosos")
@@ -527,8 +634,10 @@ def _vigencia(c: Clauses) -> None:
         )
     if s.runoff_months:
         c.item(f"Cauda / run-off. {s.runoff_text}")
-    for key, title in (("aposentados", "Segurados aposentados"),
-                       ("demissao", "Demissão voluntária e desligamento")):
+    for key, title in (
+        ("aposentados", "Segurados aposentados"),
+        ("demissao", "Demissão voluntária e desligamento"),
+    ):
         cov = s.coverages.get(key)
         if cov is None:
             continue
@@ -551,15 +660,15 @@ def _territory(c: Clauses) -> None:
     c.clause("Âmbito territorial e jurisdição")
     text = {
         "mundial": "A cobertura vale em todo o mundo, para Reclamações apresentadas em qualquer "
-                   "jurisdição, inclusive Estados Unidos e Canadá, sem sublimite específico.",
+        "jurisdição, inclusive Estados Unidos e Canadá, sem sublimite específico.",
         "brasil": "A cobertura vale para Reclamações apresentadas no território brasileiro. "
-                  "Reclamações apresentadas fora do Brasil não estão cobertas.",
+        "Reclamações apresentadas fora do Brasil não estão cobertas.",
         "mercosul": "A cobertura vale no Brasil e nos países do Mercosul em que o {T} possua "
-                    "Subsidiária indicada no Quadro 4, para Reclamações apresentadas nesses "
-                    "territórios. Fora deles, não há cobertura.",
+        "Subsidiária indicada no Quadro 4, para Reclamações apresentadas nesses "
+        "territórios. Fora deles, não há cobertura.",
         "mundial_eua": "A cobertura vale em todo o mundo. Para Reclamações apresentadas nos "
-                       "Estados Unidos da América ou no Canadá, ou fundadas em suas leis, aplica-se "
-                       "o sublimite e a Franquia indicados no Quadro 1 (Processos no Exterior).",
+        "Estados Unidos da América ou no Canadá, ou fundadas em suas leis, aplica-se "
+        "o sublimite e a Franquia indicados no Quadro 1 (Processos no Exterior).",
     }[s.territory_style]
     c.item(text)
     c.item(f"Jurisdição: {s.jurisdiction}")
@@ -574,8 +683,10 @@ def _territory(c: Clauses) -> None:
 def _general_exclusions(c: Clauses) -> None:
     s = c.spec
     c.clause("Exclusões gerais")
-    c.item("Além dos riscos excluídos por lei, a Seguradora não responde por Reclamações, {P} "
-           "ou Custos de Defesa:")
+    c.item(
+        "Além dos riscos excluídos por lei, a Seguradora não responde por Reclamações, {P} "
+        "ou Custos de Defesa:"
+    )
     items = [
         "decorrentes de ato doloso, fraude, ato de improbidade ou vantagem pessoal indevida do "
         "{S}, reconhecidos em decisão judicial ou arbitral definitiva. Até a decisão, os Custos "
@@ -820,20 +931,42 @@ def _endorsements(spec: Spec) -> list[Block]:
         blocks.append(Block("h2", f"ENDOSSO Nº {index:03d} – {endorsement.title.upper()}"))
         for paragraph in endorsement.paragraphs:
             blocks.append(Block("p", paragraph))
-    blocks.append(Block("p",
-        f"Local e data: {spec.forum_city.split('/')[0]}, {spec.emissao}. "
-        f"{spec.insurer} – Diretoria Técnica. Corretor: {spec.corretor}."))
+    blocks.append(
+        Block(
+            "p",
+            f"Local e data: {spec.forum_city.split('/')[0]}, {spec.emissao}. "
+            f"{spec.insurer} – Diretoria Técnica. Corretor: {spec.corretor}.",
+        )
+    )
     return blocks
 
 
 def build_document(spec: Spec) -> list[Block]:
     c = Clauses(spec)
     c.blocks.append(Block("h1", "SEÇÃO II – CONDIÇÕES GERAIS"))
-    c.blocks.append(Block("p", f"Condições Gerais do Seguro de Responsabilidade Civil de "
-                      f"Administradores e Diretores (D&O), Processo SUSEP nº {spec.processo} (fictício)."))
-    for step in (_objeto_e_definicoes, _basic_coverages, _defesa, _extensions, _limits, _vigencia,
-                 _territory, _general_exclusions, _specific_exclusions, _notificacao, _sinistro,
-                 _regresso, _rateio, _final_clauses):
+    c.blocks.append(
+        Block(
+            "p",
+            f"Condições Gerais do Seguro de Responsabilidade Civil de "
+            f"Administradores e Diretores (D&O), Processo SUSEP nº {spec.processo} (fictício).",
+        )
+    )
+    for step in (
+        _objeto_e_definicoes,
+        _basic_coverages,
+        _defesa,
+        _extensions,
+        _limits,
+        _vigencia,
+        _territory,
+        _general_exclusions,
+        _specific_exclusions,
+        _notificacao,
+        _sinistro,
+        _regresso,
+        _rateio,
+        _final_clauses,
+    ):
         step(c)
     return [
         *_cover(spec),
