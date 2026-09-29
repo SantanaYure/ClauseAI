@@ -9,7 +9,12 @@ import {
   POLICY_STATUS_LABELS,
 } from '../../shared/labels';
 import { describeProcessing, isDocumentBusy, isPolicyBusy } from '../../shared/processing';
-import { documentStatusTone, policyStatusTone } from '../../shared/tones';
+import {
+  documentStatusIcon,
+  documentStatusTone,
+  policyStatusIcon,
+  policyStatusTone,
+} from '../../shared/tones';
 import type { PolicySummary } from '../../types/domain';
 import { CancelExtractionButton } from './CancelExtractionButton';
 import { DeletePolicyButton } from './DeletePolicyButton';
@@ -33,7 +38,11 @@ export function PolicyCard({ policy, onDeleted }: PolicyCardProps) {
             {policy.number ? ` · nº ${policy.number}` : ''}
           </p>
         </div>
-        <Badge tone={policyStatusTone(policy.status)} busy={isPolicyBusy(policy.status)}>
+        <Badge
+          tone={policyStatusTone(policy.status)}
+          icon={policyStatusIcon(policy.status)}
+          busy={isPolicyBusy(policy.status)}
+        >
           {POLICY_STATUS_LABELS[policy.status]}
         </Badge>
       </div>
@@ -51,6 +60,7 @@ export function PolicyCard({ policy, onDeleted }: PolicyCardProps) {
             </span>
             <Badge
               tone={documentStatusTone(document.status)}
+              icon={documentStatusIcon(document.status)}
               busy={isDocumentBusy(document.status)}
             >
               {DOCUMENT_STATUS_LABELS[document.status]}
@@ -82,9 +92,13 @@ export function PolicyCard({ policy, onDeleted }: PolicyCardProps) {
           Ver evidências
         </a>
         {comparable && (
-          <a className="btn btn--secondary" href={paths.compare(policy.id)}>
+          <a
+            className="btn btn--primary btn--compact"
+            href={paths.compare(policy.id)}
+            aria-label={`Comparar ${policy.insurer} com outra apólice`}
+          >
             <Icon name="scale" size={18} />
-            Comparar
+            Comparar com outra
           </a>
         )}
       </div>

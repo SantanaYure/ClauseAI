@@ -14,7 +14,7 @@ export function ProfilesPanel({ comparison }: { comparison: ComparisonResult }) 
   const result = comparison.profiles.find((item) => item.profile === profile);
   if (!result) {
     return (
-      <BrokerNotice reason="A pontuação por perfil não foi calculada nesta comparação; consulte a aba Qualidade." />
+      <BrokerNotice reason="A pontuação por perfil não foi calculada nesta comparação; consulte “Ver cálculo”." />
     );
   }
   const winnerLabel =

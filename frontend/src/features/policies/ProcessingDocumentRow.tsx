@@ -3,7 +3,7 @@ import { Badge } from '../../components/Badge';
 import { Icon } from '../../components/Icon';
 import { DOCUMENT_STATUS_LABELS, DOCUMENT_TYPE_LABELS } from '../../shared/labels';
 import { isDocumentBusy } from '../../shared/processing';
-import { documentStatusTone } from '../../shared/tones';
+import { documentStatusIcon, documentStatusTone } from '../../shared/tones';
 import type { PolicyDocument } from '../../types/domain';
 
 const FALLBACK_FAILURE = 'Não foi possível ler este documento.';
@@ -21,7 +21,7 @@ export function ProcessingDocumentRow({ document }: { document: PolicyDocument }
         <Badge
           tone={documentStatusTone(document.status)}
           busy={isDocumentBusy(document.status)}
-          icon={failed ? 'alert' : undefined}
+          icon={documentStatusIcon(document.status)}
         >
           {DOCUMENT_STATUS_LABELS[document.status]}
         </Badge>

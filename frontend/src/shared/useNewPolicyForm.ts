@@ -81,12 +81,15 @@ export function useNewPolicyForm() {
       setCreatedId(created.policyId);
     } catch (error) {
       const code = error instanceof ApiError ? error.code : null;
-      const message = error instanceof Error ? error.message : 'Não foi possível enviar os arquivos.';
+      const message =
+        error instanceof Error ? error.message : 'Não foi possível enviar os arquivos.';
       const detail = error instanceof ApiError ? error.detail : message;
       const culprit = sendable.find((item) => detail.includes(item.file.name));
       if (culprit && code) {
         setFiles((current) =>
-          current.map((item) => (item.key === culprit.key ? { ...item, uploadError: message } : item)),
+          current.map((item) =>
+            item.key === culprit.key ? { ...item, uploadError: message } : item,
+          ),
         );
       } else {
         setSubmitError(message);

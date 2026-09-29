@@ -1,8 +1,12 @@
 import { Badge } from '../../components/Badge';
 import { BrokerNotice } from '../../components/BrokerNotice';
-import { DOCUMENT_TYPE_LABELS, POLICY_SLOT_LABELS, POLICY_STATUS_LABELS } from '../../shared/labels';
+import {
+  DOCUMENT_TYPE_LABELS,
+  POLICY_SLOT_LABELS,
+  POLICY_STATUS_LABELS,
+} from '../../shared/labels';
 import { unavailableReason } from '../../shared/compareSelection';
-import { policyStatusTone } from '../../shared/tones';
+import { policyStatusIcon, policyStatusTone } from '../../shared/tones';
 import type { PolicySummary } from '../../types/domain';
 
 type PolicySlotProps = {
@@ -38,7 +42,7 @@ export function PolicySlot({ slot, value, onChange, policies }: PolicySlotProps)
       </select>
       {selected ? (
         <div className="slot__details">
-          <Badge tone={policyStatusTone(selected.status)}>
+          <Badge tone={policyStatusTone(selected.status)} icon={policyStatusIcon(selected.status)}>
             {POLICY_STATUS_LABELS[selected.status]}
           </Badge>
           <p className="tag-row">
