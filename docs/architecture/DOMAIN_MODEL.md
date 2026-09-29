@@ -12,7 +12,7 @@ Value objects recomendados: `DocumentId`, `PolicyId`, `ComparisonId`, `Processin
 
 Representa o arquivo recebido e seus metadados.
 
-- **Atributos:** `document_id`, `original_filename`, `content_type`, `file_kind` (`SEARCHABLE_PDF`, `SCANNED_PDF`, `IMAGE`, `DOCX`, `OTHER`), `document_type` (`DocumentType`), `insurer?`, `policy_name?`, `policy_number?`, `issue_date?`, `validity?`, `version?`, `language?`, `size_bytes`, `checksum_sha256`, `storage_key`, `uploaded_at`, `status`, `correlation_id`, `page_count?`, `extraction_quality?`, `ocr_required`, `metadata`, `failure?`.
+- **Atributos:** `document_id`, `original_filename`, `content_type`, `file_kind` (`SEARCHABLE_PDF`, `SCANNED_PDF`, `IMAGE`, `DOCX`, `OTHER`), `document_type` (`DocumentType`), `insurer?`, `policy_name?`, `policy_number?`, `issue_date?`, `validity?`, `version?`, `language?`, `size_bytes`, `checksum_sha256`, `storage_key`, `uploaded_at`, `status`, `correlation_id`, `page_count?`, `extraction_quality?`, `ocr_required`, `metadata`, `failure?`, `failure_code?`, `failure_retryable`.
 - Campos não identificados recebem “Não identificado” e disparam `BROKER_GUIDANCE`.
 - `DOCX`: `ocr_required` é sempre `false` e `page_count` é o total de blocos lógicos, pois o formato não tem páginas fixas. O tipo é detectado pelo conteúdo (zip com `[Content_Types].xml` e `word/document.xml`).
 - **Responsabilidade:** garantir identidade, integridade básica, tipo permitido e ciclo do arquivo.

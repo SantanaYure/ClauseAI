@@ -145,10 +145,16 @@ Estados: `Documentado` (spec e ADR prontos), `Em andamento`, `Concluído`. Só m
 
 | ID | Incremento | Referências | Estado |
 |---|---|---|---|
-| I-01 | Suporte a DOCX: detecção por conteúdo, leitura local sem OCR, origem estável da evidência (bloco lógico), erros classificados, comparação PDF × DOCX | ADR-024; SPEC-001 a SPEC-004 | Backend entregue (leitor, erros classificados, testes unitários). Pendente: validação do `qa`, rótulo "bloco" na interface e comparação PDF × DOCX ponta a ponta. Limitações conhecidas abaixo |
-| I-02 | Remake visual e identidade de marca: fontes, cores, selos, navegação, envio com validação, processamento em 3 passos, slots A e B, resultado em ordem fixa | ADR-025; SPEC-007, SPEC-010, SPEC-019 | Documentado. Frontend em andamento. Pendente: disposição final de "Ver cálculo" |
+| I-01 | Suporte a DOCX: detecção por conteúdo, leitura local sem OCR, origem estável da evidência (bloco lógico), erros classificados, comparação PDF × DOCX | ADR-024; SPEC-001 a SPEC-004 | Implementado (backend: leitor, erros classificados, testes; frontend: rótulo "bloco" nas evidências; apólices de exemplo em PDF e DOCX em `Policy/`). Aguardando validação final do `qa`, incluindo a comparação PDF × DOCX ponta a ponta. Limitações conhecidas abaixo |
+| I-02 | Remake visual e identidade de marca: fontes, cores, selos, navegação, envio com validação, processamento em 3 passos, slots A e B, resultado em ordem fixa | ADR-025; SPEC-007, SPEC-010, SPEC-019 | Implementado (fontes, cores, selos, menu, envio com validação por arquivo, 3 passos, tela de sucesso, slots A e B, resultado sem abas com "Ver cálculo" recolhido, "Tentar de novo"). Aguardando validação final do `qa`, incluindo a revisão de contraste |
 
 Limitações conhecidas de I-01 (evolução futura): o leitor de DOCX não extrai a numeração automática de listas e cláusulas do Word (`numbering.xml`), notas de rodapé nem caixas de texto. Evidências que dependam desses elementos podem perder o número da cláusula ou o texto. Detalhes na SPEC-004.
+
+Limitações conhecidas de I-02 (SPEC-010):
+
+- O upload é recusado inteiro se um arquivo do lote for inválido. O frontend associa o erro ao arquivo pelo nome citado na mensagem.
+- O backend não expõe o tipo de arquivo nas evidências. O frontend busca os dois `GET /policies/{id}` da comparação e usa a extensão `.docx` como fallback.
+- As apólices de exemplo de `Policy/` são menores que apólices reais (cerca de 12 páginas). Servem para testar a comparação, não para medir desempenho em documentos longos.
 
 Definição de pronto: critérios de aceite das specs citadas passam, incluindo uma comparação PDF × DOCX ponta a ponta e a revisão de contraste da nova paleta.
 

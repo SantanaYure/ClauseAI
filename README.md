@@ -33,6 +33,7 @@ ClauseAI/
 ├── backend/
 ├── frontend/
 ├── docs/
+├── Policy/                 # apólices D&O fictícias de exemplo (PDF e DOCX)
 ├── Projeto_Final_Artefatos/
 ├── .editorconfig
 ├── .gitignore
@@ -107,6 +108,8 @@ Implementado:
 - **Frontend:** cinco telas navegáveis e mobile first (Início, Apólices, Comparar, Conceitos, Histórico), ligadas à API.
 - **Backend:** upload de apólices com vários documentos, processamento assíncrono, extração com Gemini (texto nativo de PDF e DOCX ou OCR multimodal de imagem e PDF digitalizado), normalização pelo catálogo D&O, comparação com avaliação por conceito pelo Gemini, pontuação ponderada, perfis de risco, resumo executivo, checklist de qualidade e consulta por conceito.
 - Persistência em Firestore e arquivos em pasta local (Firebase Storage opcional), logs estruturados com correlação e testes automatizados.
+
+- **Apólices de exemplo:** 5 apólices D&O fictícias, sem valor contratual, em `Policy/` (PDF e DOCX), geradas por `backend/scripts/generate_sample_policies.py`. Servem para testar a comparação. Veja [`docs/development/getting-started.md`](docs/development/getting-started.md).
 
 Não implementado: autenticação, fila durável e endpoints `/documents` isolados. A sequência está em [`docs/ROADMAP.md`](docs/ROADMAP.md).
 

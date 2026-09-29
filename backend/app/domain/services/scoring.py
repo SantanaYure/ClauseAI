@@ -529,8 +529,12 @@ def build_quality_gate(
 
     kinds = {d.file_kind for d in documents}
     only_docx = kinds == {FileKind.DOCX}
-    units = (
-        "páginas" if FileKind.DOCX not in kinds else "blocos" if only_docx else "páginas e blocos"
+    processed_label = (
+        "Todas as páginas foram processadas"
+        if FileKind.DOCX not in kinds
+        else "Todos os blocos foram processados"
+        if only_docx
+        else "Todas as páginas e todos os blocos foram processados"
     )
     origin = "página" if FileKind.DOCX not in kinds else "bloco" if only_docx else "página ou bloco"
 
@@ -544,7 +548,7 @@ def build_quality_gate(
         check("ocr", "OCR avaliado quanto à confiança", min_confidence >= params.ocr_min_confidence,
               f"OCR usado em {', '.join(ocr_documents)}; menor confiança {min_confidence:.2f}."
               if ocr_documents else "Nenhum documento precisou de OCR."),
-        check("pages", f"Todas as {units} foram processadas", all(d.pages > 0 for d in documents),
+        check("pages", processed_label, all(d.pages > 0 for d in documents),
               _units_detail(documents)),
         check("classification", "Documentos classificados",
               all(d.type != DocumentType.OTHER for d in documents),

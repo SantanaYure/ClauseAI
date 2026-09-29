@@ -58,6 +58,17 @@ python scripts/build_knowledge_base.py --version 2026.09.1
 
 Rode novamente sempre que a planilha em `docs/domain/sources/` ou o `DO_KNOWLEDGE_BASE.md` mudarem; o script falha se a soma dos pesos não for 207.
 
+## Apólices de exemplo
+
+`scripts/generate_sample_policies.py` gera as 5 apólices D&O fictícias de `Policy/` (PDF e DOCX, mesmo conteúdo, sem valor contratual). Precisa do extra opcional `samples` (reportlab):
+
+```powershell
+python -m pip install -e ".[dev,samples]"
+python scripts/generate_sample_policies.py [--output-dir ..\Policy] [--only 03]
+```
+
+A geração é determinística. Os fatos de cada apólice estão em `scripts/sample_policies/catalog.py`. Detalhes e a matriz de diferenças em [`docs/development/getting-started.md`](../docs/development/getting-started.md).
+
 ## Quality
 
 ```powershell
@@ -82,4 +93,4 @@ Fluxo: `POST /policies` grava os arquivos e responde `202`; o worker extrai cada
 
 ## Formatos e erros
 
-Aceitos: PDF, DOCX, JPG e PNG, detectados pelo conteúdo. Em DOCX, a "página" da evidência é um bloco lógico numerado a partir de 1 (quebra de página, quebra de seção ou 3.500 caracteres). Arquivos protegidos ou corrompidos respondem `422` (`DOCX_PROTECTED`, `DOCX_CORRUPTED`, `PDF_PROTECTED`, `PDF_CORRUPTED`); XLSX, PPTX e outros zips, `415`. Falhas da IA têm código próprio e `retryable`, e a comparação vira `PARTIAL` se a avaliação por conceito ou o resumo falhar. Detalhes em `docs/specs/SDD_SPECIFICATIONS.md` (SPEC-001, SPEC-004 e SPEC-009).
+Aceitos: PDF, DOCX, JPG e PNG, detectados pelo conteúdo. Em DOCX, a "página" da evidência é um bloco lógico numerado a partir de 1 (quebra de página, quebra de seção ou 3.500 caracteres). Arquivos protegidos ou corrompidos respondem `422` (`DOCX_PROTECTED`, `DOCX_CORRUPTED`, `PDF_PROTECTED`, `PDF_CORRUPTED`); XLSX, PPTX e outros zips, `415`. Falhas da IA têm código próprio e `retryable`, e a comparação vira `PARTIAL` se a avaliação por conceito ou o resumo falhar. Documento `FAILED` expõe `failure`, `failure_code` e `failure_retryable` (falha inesperada grava `UNEXPECTED_ERROR`, retryable). Falha de storage no envio responde `503 STORAGE_UNAVAILABLE` (retryable), apaga os originais já gravados e não cria a apólice. Detalhes em `docs/specs/SDD_SPECIFICATIONS.md` (SPEC-001, SPEC-004 e SPEC-009).
