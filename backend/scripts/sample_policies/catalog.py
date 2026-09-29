@@ -314,7 +314,7 @@ CERRADO = Spec(
     supl_premium_pct=75,
     supl_deadline_days=30,
     notice_days=45,
-    territory="Brasil e Paraguai (onde o Tomador possua Subsidiária indicada no Quadro 4).",
+    territory="Brasil e Paraguai (onde o Tomador possua Subsidiária indicada no Quadro 5).",
     jurisdiction="Tribunais brasileiros e paraguaios, nas matérias das Subsidiárias indicadas.",
     territory_style="mercosul",
     arbitration=False,
@@ -372,7 +372,7 @@ CERRADO = Spec(
                 "A exclusão de poluição gradual da Cláusula 10 não alcança Reclamações por "
                 "evento súbito e acidental de derramamento de defensivos agrícolas ou de "
                 "efluentes, notificado à Seguradora em até 45 dias.",
-                "Aplica-se ao evento súbito a Franquia de R$ 300.000,00 do Quadro 2.",
+                "Aplica-se ao evento súbito a Franquia de R$ 300.000,00 do Quadro 3.",
             ),
         ),
         Endorsement(
@@ -492,7 +492,7 @@ DELFOS = Spec(
             "Cláusula de jurisdição e lei dos Estados Unidos e Canadá",
             (
                 "Para Reclamações apresentadas nos Estados Unidos da América ou no Canadá, "
-                "aplica-se o sublimite de R$ 10.000.000,00 do Quadro 1, a Franquia de "
+                "aplica-se o sublimite de R$ 10.000.000,00 do Quadro 2, a Franquia de "
                 "R$ 2.000.000,00 e a regra de que os Custos de Defesa integram o sublimite.",
                 "A Seguradora poderá indicar escritório de advocacia local aprovado. Os "
                 "honorários serão limitados às tarifas usuais de mercado na jurisdição.",

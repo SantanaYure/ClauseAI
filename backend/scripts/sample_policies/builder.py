@@ -141,7 +141,7 @@ def _cover(spec: Spec) -> list[Block]:
                 (
                     ("Apólice nº", spec.apolice),
                     ("Proposta nº", spec.proposta),
-                    ("Processo SUSEP nº", f"{spec.processo} (fictício)"),
+                    ("Processo SUSEP nº", f"{spec.processo}"),
                     (
                         "Ramo / Modalidade",
                         "0351 – Responsabilidade Civil de Administradores e "
@@ -154,7 +154,7 @@ def _cover(spec: Spec) -> list[Block]:
                     ("Atividade", spec.tomador_profile),
                     (
                         "Corretor de seguros",
-                        f"{spec.corretor} – SUSEP nº {spec.corretor_susep} (fictício)",
+                        f"{spec.corretor} – SUSEP nº {spec.corretor_susep}",
                     ),
                 ),
                 (0.32, 0.68),
@@ -207,7 +207,7 @@ def _limits_table(spec: Spec) -> Table:
         ("Cobertura", "Situação", "Limite / Sublimite", "Franquia"),
         tuple(rows),
         (0.38, 0.14, 0.26, 0.22),
-        caption="Quadro 1 – Limite Máximo de Garantia, coberturas e sublimites",
+        caption="Quadro 2 – Limite Máximo de Garantia, coberturas e sublimites",
     )
 
 
@@ -257,7 +257,7 @@ def _summary(spec: Spec) -> list[Block]:
                     ),
                 ),
                 (0.34, 0.66),
-                caption="Quadro 0 – Limite, moeda e prêmio",
+                caption="Quadro 1 – Limite, moeda e prêmio",
             ),
         ),
         Block("table", table=_limits_table(spec)),
@@ -272,7 +272,7 @@ def _summary(spec: Spec) -> list[Block]:
                     ("Participação obrigatória do Segurado", spec.participacao),
                 ),
                 (0.34, 0.66),
-                caption="Quadro 2 – Franquias, retenção e participação obrigatória",
+                caption="Quadro 3 – Franquias, retenção e participação obrigatória",
             ),
         ),
         Block(
@@ -281,7 +281,7 @@ def _summary(spec: Spec) -> list[Block]:
                 ("Categoria de Segurado", "Abrangência"),
                 spec.insureds,
                 (0.34, 0.66),
-                caption="Quadro 3 – Segurados",
+                caption="Quadro 4 – Segurados",
             ),
         ),
     ]
@@ -293,7 +293,7 @@ def _summary(spec: Spec) -> list[Block]:
                     ("Subsidiária", "Participação / país"),
                     spec.subsidiaries,
                     (0.6, 0.4),
-                    caption="Quadro 4 – Subsidiárias cobertas",
+                    caption="Quadro 5 – Subsidiárias cobertas",
                 ),
             )
         )
@@ -347,7 +347,7 @@ def _terms_table(spec: Spec) -> Table:
         ("Item", "Condição"),
         tuple(rows),
         (0.28, 0.72),
-        caption="Quadro 5 – Retroatividade, prazos, território e notificação",
+        caption="Quadro 6 – Retroatividade, prazos, território e notificação",
     )
 
 
@@ -398,12 +398,12 @@ def _objeto_e_definicoes(c: Clauses) -> None:
             "Subsidiária",
             "sociedade em que o {T} detenha, direta ou indiretamente, mais de "
             "50% (cinquenta por cento) do capital votante, ou o poder de eleger "
-            "a maioria dos administradores, indicada no Quadro 4 ou incluída por "
+            "a maioria dos administradores, indicada no Quadro 5 ou incluída por "
             "endosso.",
         ),
         (
             "{S}",
-            "as pessoas físicas indicadas no Quadro 3, presentes, passadas ou futuras, que "
+            "as pessoas físicas indicadas no Quadro 4, presentes, passadas ou futuras, que "
             "exerçam ou tenham exercido cargo de administração, em conselho, comitê "
             "estatutário ou função de gestão com poderes de representação no {T} ou em "
             "Subsidiária, inclusive, quando previsto, o espólio e os herdeiros.",
@@ -458,7 +458,7 @@ def _objeto_e_definicoes(c: Clauses) -> None:
         (
             "Franquia",
             "parcela das {P} que fica a cargo do {T} ou do {S}, deduzida de cada "
-            "Reclamação, conforme o Quadro 2.",
+            "Reclamação, conforme o Quadro 3.",
         ),
         (
             "Poluentes",
@@ -484,7 +484,7 @@ def _objeto_e_definicoes(c: Clauses) -> None:
         (
             "Prazo Suplementar",
             "extensão contratável do período de apresentação de Reclamações "
-            "após o fim da vigência, nas condições do Quadro 5.",
+            "após o fim da vigência, nas condições do Quadro 6.",
         ),
     ]
     for term, text in defs:
@@ -503,7 +503,7 @@ def _basic_coverages(c: Clauses) -> None:
     c.item(
         "{b_name}. A Seguradora reembolsará ao {T} as {P} que este, na forma da lei ou de seu "
         "estatuto, tenha pago ou adiantado em nome do {S} em razão de Reclamação coberta "
-        "(Side B), aplicada a franquia do Quadro 2."
+        "(Side B), aplicada a franquia do Quadro 3."
     )
     side_c = s.coverages["side_c"]
     if side_c.status == "C":
@@ -545,7 +545,7 @@ def _defesa(c: Clauses) -> None:
         "Defesa razoáveis do {S} em Reclamação que possa ser coberta. {limite}",
         limite=(
             "Os Custos de Defesa são pagos em adição ao {L_abbr}, dentro do valor indicado no "
-            "Quadro 1."
+            "Quadro 2."
             if additional
             else "Os Custos de Defesa integram o {L_abbr} e reduzem sua disponibilidade."
         ),
@@ -568,7 +568,7 @@ def _extensions(c: Clauses) -> None:
     c.clause("Extensões de cobertura")
     c.item(
         "Sujeitas ao {L_abbr}, às Franquias e às exclusões destas Condições Gerais, estão "
-        "contratadas as extensões abaixo, nos limites do Quadro 1. Sublimites integram o "
+        "contratadas as extensões abaixo, nos limites do Quadro 2. Sublimites integram o "
         "{L_abbr} e não são adicionais a ele."
     )
     optional = _coverage_items(c, CLAUSE_5_KEYS)
@@ -584,11 +584,11 @@ def _limits(c: Clauses) -> None:
         "do número de Segurados, Reclamações ou reclamantes."
     )
     c.item(
-        "Sublimites, quando indicados no Quadro 1, são agregados por vigência, integram o "
+        "Sublimites, quando indicados no Quadro 2, são agregados por vigência, integram o "
         "{L_abbr} e não se somam a ele. O pagamento de um sublimite erode o {L_abbr}."
     )
     c.item(
-        "A Franquia do Quadro 2 é deduzida de cada Reclamação. Quando mais de uma Franquia "
+        "A Franquia do Quadro 3 é deduzida de cada Reclamação. Quando mais de uma Franquia "
         "for aplicável a um mesmo Sinistro, prevalecerá a maior. Não se aplica Franquia aos "
         "Custos de Defesa da {A}."
     )
@@ -699,11 +699,11 @@ def _territory(c: Clauses) -> None:
         "brasil": "A cobertura vale para Reclamações apresentadas no território brasileiro. "
         "Reclamações apresentadas fora do Brasil não estão cobertas.",
         "mercosul": "A cobertura vale no Brasil e nos países do Mercosul em que o {T} possua "
-        "Subsidiária indicada no Quadro 4, para Reclamações apresentadas nesses "
+        "Subsidiária indicada no Quadro 5, para Reclamações apresentadas nesses "
         "territórios. Fora deles, não há cobertura.",
         "mundial_eua": "A cobertura vale em todo o mundo. Para Reclamações apresentadas nos "
         "Estados Unidos da América ou no Canadá, ou fundadas em suas leis, aplica-se "
-        "o sublimite e a Franquia indicados no Quadro 1 (Processos no Exterior).",
+        "o sublimite e a Franquia indicados no Quadro 2 (Processos no Exterior).",
     }[s.territory_style]
     c.item(text)
     c.item(f"Jurisdição: {s.jurisdiction}")
@@ -976,6 +976,13 @@ def _endorsements(spec: Spec) -> list[Block]:
             f"{spec.insurer} – Diretoria Técnica. Corretor: {spec.corretor}.",
         )
     )
+    blocks.append(
+        Block(
+            "note",
+            "Nota final: esta apólice é fictícia e não tem valor contratual; foi criada apenas "
+            "para testes do ClauseAI.",
+        )
+    )
     return blocks
 
 
@@ -986,7 +993,7 @@ def build_document(spec: Spec) -> list[Block]:
         Block(
             "p",
             f"Condições Gerais do Seguro de Responsabilidade Civil de "
-            f"Administradores e Diretores (D&O), Processo SUSEP nº {spec.processo} (fictício).",
+            f"Administradores e Diretores (D&O), Processo SUSEP nº {spec.processo}.",
         )
     )
     for step in (

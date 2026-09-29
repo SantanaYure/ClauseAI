@@ -169,7 +169,7 @@ COVERAGE_TEXTS: dict[str, tuple[str, tuple[str, str], str]] = {
         ),
         "Ficam excluídas as Reclamações decorrentes de relação de emprego, inclusive assédio, "
         "discriminação e dispensa, restando garantidos apenas os Custos de Defesa do {S}, "
-        "quando houver sublimite indicado no Quadro 1.",
+        "quando houver sublimite indicado no Quadro 2.",
     ),
     "imagem": (
         "Proteção da Imagem Pessoal e Relações Públicas",
@@ -189,14 +189,14 @@ COVERAGE_TEXTS: dict[str, tuple[str, tuple[str, str], str]] = {
             "Estão cobertas as Reclamações que atribuam ao {S} responsabilidade pessoal por "
             "tributos e contribuições não recolhidos pelo {T} (arts. 135 do Código Tributário "
             "Nacional e 50 do Código Civil), {lim}. O tributo em si, seus acréscimos e "
-            "a multa fiscal ficam excluídos, salvo se expressamente indicados no Quadro 1.",
+            "a multa fiscal ficam excluídos, salvo se expressamente indicados no Quadro 2.",
             "Fica garantida a defesa e a condenação do {S} em redirecionamento de execução "
             "fiscal ou cobrança de contribuições previdenciárias por responsabilidade pessoal "
             "do administrador, {lim}.",
         ),
         "Ficam excluídos tributos, contribuições, encargos e multas fiscais, bem como "
         "Reclamações decorrentes de responsabilidade tributária ou previdenciária do {S}, "
-        "ressalvados os Custos de Defesa quando houver sublimite indicado no Quadro 1.",
+        "ressalvados os Custos de Defesa quando houver sublimite indicado no Quadro 2.",
     ),
     "adv_internos": (
         "Advogados Internos",
@@ -229,7 +229,7 @@ COVERAGE_TEXTS: dict[str, tuple[str, tuple[str, str], str]] = {
             "decorrentes de decisão administrativa, {lim}.",
         ),
         "Ficam excluídas Reclamações por lesão corporal, doença, sofrimento físico ou morte "
-        "de qualquer pessoa, salvo Custos de Defesa se houver sublimite indicado no Quadro 1.",
+        "de qualquer pessoa, salvo Custos de Defesa se houver sublimite indicado no Quadro 2.",
     ),
     "materiais": (
         "Danos Materiais",
@@ -240,7 +240,7 @@ COVERAGE_TEXTS: dict[str, tuple[str, tuple[str, str], str]] = {
             "{ato}, {lim}.",
         ),
         "Ficam excluídas Reclamações por danos ou perda de bens tangíveis, inclusive sua "
-        "privação de uso, salvo Custos de Defesa se houver sublimite indicado no Quadro 1.",
+        "privação de uso, salvo Custos de Defesa se houver sublimite indicado no Quadro 2.",
     ),
     "morais": (
         "Danos Morais",
@@ -455,7 +455,7 @@ POLLUTION_TEXTS: dict[str, tuple[str, ...]] = {
         "conhecida.",
         "Observada a exclusão, as Reclamações por dano ambiental decorrentes de decisão de "
         "gestão estão cobertas nos termos da Cláusula 5, dentro do sublimite indicado no "
-        "Quadro 1.",
+        "Quadro 2.",
     ),
     "coverage": (
         "Fica excluída a poluição gradual, contínua ou previsível, assim como a decorrente "

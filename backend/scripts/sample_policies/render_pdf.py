@@ -192,9 +192,7 @@ def _flowables(blocks: list[Block], width: float) -> list[Any]:
 
 
 def render_pdf(spec: Spec, blocks: list[Block], path: Path) -> None:
-    footer = (
-        f"{spec.insurer} · Apólice nº {spec.apolice} · Documento fictício, sem valor contratual"
-    )
+    footer = f"{spec.insurer} · Apólice nº {spec.apolice}"
     document = BaseDocTemplate(
         str(path),
         pagesize=A4,

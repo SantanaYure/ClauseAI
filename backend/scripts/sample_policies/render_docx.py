@@ -73,7 +73,7 @@ def _setup_page(document: DocxDocument, spec: Spec) -> None:
     header.text = f"{spec.insurer.upper()} · Seguro D&O · Apólice nº {spec.apolice}"
     footer = section.footer.paragraphs[0]
     footer.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    footer.add_run(f"{spec.insurer} · Apólice nº {spec.apolice} · Documento fictício · Página ")
+    footer.add_run(f"{spec.insurer} · Apólice nº {spec.apolice} · Página ")
     _field(footer, "PAGE")
     footer.add_run(" de ")
     _field(footer, "NUMPAGES")
