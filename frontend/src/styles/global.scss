@@ -1,22 +1,41 @@
 // Tokens do tema. Componentes usam apenas estas variáveis.
 :root {
-  --color-bg: #ffffff;
-  --color-surface: #f5f5f4;
-  --color-surface-strong: #ebebea;
-  --color-text: #16171a;
-  --color-text-secondary: #5b5f66;
-  --color-border: #e4e4e7;
-  --color-border-strong: #d0d5dd;
-  --color-accent: #f5c21b;
-  --color-accent-hover: #e3b00c;
-  --color-on-accent: #16171a;
-  --color-nav: #16171a;
-  --color-nav-text: #c9cbd0;
-  --color-focus: #175cd3;
-  --color-slot-a: #16171a;
-  --color-slot-b: #7a5af8;
+  // ---------- Paleta ----------
+  // Marca
+  --brand-black: #000000;
+  --brand-cream: #f9efe5;
+  --brand-yellow: #ffd700;
+  // Base
+  --base-gray: #7f8790;
+  --base-blue-gray: #8f92a1;
+  --base-off-white: #f8f8f8;
 
-  // Tons de resultado (base de conhecimento, seção 8) — texto / fundo / faixa.
+  // ---------- Papéis semânticos ----------
+  --color-bg: var(--brand-cream);
+  --color-surface: #ffffff;
+  --color-surface-muted: var(--base-off-white);
+  --color-surface-strong: #efe4d8; // trilhas e fundos de apoio sobre o creme
+  --color-text: var(--brand-black);
+  // #7f8790 sobre creme não chega a 4,5:1; texto secundário usa uma variação escura do cinza base.
+  --color-text-secondary: #565d67;
+  --color-text-on-dark: #ffffff;
+  --color-border: #ebe0d4;
+  --color-border-strong: var(--base-blue-gray);
+  --color-primary: var(--brand-black);
+  --color-primary-hover: #262626;
+  --color-on-primary: #ffffff;
+  --color-accent: var(--brand-yellow);
+  --color-accent-hover: #ebc500;
+  --color-on-accent: var(--brand-black);
+  --color-nav: #ffffff;
+  --color-nav-text: #565d67;
+  --color-focus: var(--brand-black);
+  --color-slot-a: var(--brand-black);
+  --color-slot-a-text: #ffffff;
+  --color-slot-b: var(--base-gray);
+  --color-slot-b-text: var(--brand-black);
+
+  // Tons de resultado (base de conhecimento, seção 8) — texto / fundo / faixa. NÃO ALTERAR.
   --tone-danger-text: #b42318;
   --tone-danger-bg: #fee4e2;
   --tone-danger-edge: #d92d20;
@@ -37,6 +56,7 @@
   --tone-neutral-text: #344054;
   --tone-neutral-bg: #ffffff;
 
+  // ---------- Espaçamento ----------
   --space-1: 0.25rem;
   --space-2: 0.5rem;
   --space-3: 0.75rem;
@@ -44,42 +64,52 @@
   --space-5: 1.25rem;
   --space-6: 1.5rem;
   --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
 
-  --radius-sm: 0.5rem;
-  --radius-md: 0.75rem;
-  --radius-lg: 1rem;
+  // ---------- Raios ----------
+  --radius-sm: 0.75rem;
+  --radius-md: 1rem;
+  --radius-lg: 1.5rem;
+  --radius-xl: 2rem;
   --radius-pill: 999px;
 
+  // ---------- Tipografia ----------
+  --font-heading:
+    'IBM Plex Sans', 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-body: Roboto, 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
   --font-size-xs: 0.75rem;
   --font-size-sm: 0.875rem;
   --font-size-md: 1rem;
   --font-size-lg: 1.125rem;
   --font-size-xl: 1.375rem;
-  --font-size-2xl: 1.75rem;
-  --font-size-hero: 2rem;
+  --font-size-2xl: 1.875rem;
+  --font-size-hero: 2.25rem;
+  --font-size-display: 2.75rem; // números em destaque
   --line-height: 1.5;
 
-  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
-  --shadow-md: 0 4px 12px rgba(16, 24, 40, 0.08);
+  // ---------- Sombras (suaves, quentes) ----------
+  --shadow-sm: 0 1px 2px rgba(60, 40, 20, 0.04), 0 2px 8px rgba(60, 40, 20, 0.05);
+  --shadow-md: 0 2px 6px rgba(60, 40, 20, 0.05), 0 12px 32px rgba(60, 40, 20, 0.09);
+  --shadow-nav: 0 -4px 24px rgba(60, 40, 20, 0.08);
 
+  // ---------- Layout ----------
   --topbar-height: 3.5rem;
-  --bottom-nav-height: 4rem;
-  --sidebar-width: 15rem;
+  --bottom-nav-height: 4.5rem;
+  --sidebar-width: 16rem;
   --content-max: 60rem;
   --touch-target: 2.75rem;
 
-  font-family:
-    Inter,
-    ui-sans-serif,
-    system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    'Segoe UI',
-    sans-serif;
+  font-family: var(--font-body);
+  font-weight: var(--fw-regular);
   color: var(--color-text);
   background: var(--color-bg);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
   line-height: var(--line-height);
 }
 
@@ -92,6 +122,23 @@ body {
   min-width: 320px;
   min-height: 100vh;
   background: var(--color-bg);
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-heading);
+  font-weight: var(--fw-semibold);
+}
+
+strong,
+b,
+th,
+dt,
+summary,
+legend {
+  font-weight: var(--fw-medium);
 }
 
 h1,
@@ -125,8 +172,10 @@ textarea {
 }
 
 :focus-visible {
-  outline: 3px solid var(--color-focus);
-  outline-offset: 2px;
+  // Anel preto (contraste) com halo amarelo (marca).
+  outline: 2px solid var(--color-focus);
+  outline-offset: 0;
+  box-shadow: 0 0 0 5px var(--brand-yellow);
 }
 
 .visually-hidden {
