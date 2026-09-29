@@ -2,6 +2,7 @@ import { useId, useState, type DragEvent, type FormEvent } from 'react';
 import { paths } from '../../app/router';
 import { BrokerNotice } from '../../components/BrokerNotice';
 import { Icon } from '../../components/Icon';
+import { Illustration } from '../../components/Illustration';
 import { PageHeader } from '../../components/PageHeader';
 import { ACCEPTED_MIME_TYPES, MAX_FILE_SIZE_BYTES, clauseApi } from '../../services/api/clause-api';
 import { formatFileSize } from '../../shared/format';
@@ -141,7 +142,7 @@ export function NewPolicyPage() {
           onDragLeave={() => setDragging(false)}
           onDrop={onDrop}
         >
-          <Icon name="upload" size={32} />
+          <Illustration name="upload" />
           <span className="dropzone__title">Arraste os arquivos ou toque para selecionar</span>
           <span className="dropzone__hint">
             PDF, JPG ou PNG · até {formatFileSize(MAX_FILE_SIZE_BYTES)} por arquivo

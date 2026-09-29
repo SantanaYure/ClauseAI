@@ -108,6 +108,7 @@ function PolicyList({ policies, onDeleted }: PolicyListProps) {
     return (
       <EmptyState
         icon="policy"
+        illustration="empty"
         title="Nenhuma apólice encontrada"
         text="Ajuste a busca ou adicione uma apólice com seus documentos."
         action={

@@ -1,6 +1,7 @@
 import { Badge } from '../../components/Badge';
 import { BrokerNotice } from '../../components/BrokerNotice';
 import { Icon } from '../../components/Icon';
+import { Illustration } from '../../components/Illustration';
 import { ScoreBar } from '../../components/ScoreBar';
 import { formatPercent, formatPercentagePoints, formatPoints } from '../../shared/format';
 import { DECISION_MODE_LABELS, POLICY_SLOT_LABELS } from '../../shared/labels';
@@ -39,6 +40,7 @@ export function SummaryPanel({ comparison }: SummaryPanelProps) {
           </Badge>
         </div>
         <p>{summary.conclusion}</p>
+        {!conditioned && <Illustration name="success" />}
         {conditioned && <BrokerNotice compact />}
       </section>
 

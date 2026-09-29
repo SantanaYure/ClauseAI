@@ -66,6 +66,7 @@ function CompareForm({ policies, initialA, initialB }: CompareFormProps) {
     return (
       <EmptyState
         icon="policy"
+        illustration="compare"
         title="São necessárias duas apólices processadas"
         text="Adicione outra apólice e aguarde o processamento para comparar."
         action={
@@ -192,7 +193,7 @@ function PolicySlot({ slot, value, onChange, policies, disabledId }: PolicySlotP
   const selected = policies.find((policy) => policy.id === value);
   const selectId = `policy-${slot}`;
   return (
-    <section className="card slot">
+    <section className={`card slot slot--${slot.toLowerCase()}`}>
       <label htmlFor={selectId} className="slot__label">
         {POLICY_SLOT_LABELS[slot]}
       </label>

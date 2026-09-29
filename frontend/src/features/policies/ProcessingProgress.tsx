@@ -2,6 +2,7 @@ import { paths } from '../../app/router';
 import { Badge } from '../../components/Badge';
 import { BrokerNotice } from '../../components/BrokerNotice';
 import { Icon } from '../../components/Icon';
+import { Illustration } from '../../components/Illustration';
 import { Spinner } from '../../components/Spinner';
 import { ErrorState, LoadingState } from '../../components/StateViews';
 import { clauseApi } from '../../services/api/clause-api';
@@ -33,14 +34,14 @@ export function ProcessingProgress({ policyId }: { policyId: string }) {
 
   return (
     <div className="stack">
+      <Illustration name={done && !cancelled ? 'success' : 'search'} className="processing-art" />
       <p className="processing-note processing-note--block" role="status" aria-live="polite">
         {done ? (
           cancelled ? (
             <>
               <Icon name="alert" size={20} />
               <span>
-                <strong>Processamento cancelado.</strong>
-                A extração foi interrompida pelo usuário.
+                <strong>Processamento cancelado.</strong>A extração foi interrompida pelo usuário.
               </span>
             </>
           ) : (

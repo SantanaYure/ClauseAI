@@ -29,8 +29,8 @@ $tones: danger, high, medium, success, muted, info, neutral;
   z-index: 50;
   padding: var(--space-2) var(--space-4);
   border-radius: var(--radius-sm);
-  background: var(--color-accent);
-  color: var(--color-on-accent);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
   font-weight: var(--fw-medium);
 
   &:focus {
@@ -1157,39 +1157,106 @@ $tones: danger, high, medium, success, muted, info, neutral;
 
 // ---------- Comparar ----------
 
+// Letra do slot (A/B) além da cor: círculo preto para A, cinza para B.
+%slot-letter {
+  display: inline-grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  font-family: var(--font-heading);
+  font-size: var(--font-size-md);
+  font-weight: var(--fw-semibold);
+  line-height: 1;
+}
+
+@mixin slot-letter($slot) {
+  &::before {
+    content: if($slot == a, 'A', 'B') / '';
+    @extend %slot-letter;
+    background: var(--color-slot-#{$slot});
+    color: var(--color-slot-#{$slot}-text);
+  }
+}
+
 .slot {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: var(--space-3);
+  min-height: 11rem;
+  padding: var(--space-6);
+  border-radius: var(--radius-xl);
+  border-top: 6px solid var(--color-slot-a);
+
+  &--b {
+    border-top-color: var(--color-slot-b);
+  }
 
   select {
-    min-height: 3rem;
-    padding: var(--space-2) var(--space-3);
+    min-height: 3.25rem;
+    padding: var(--space-2) var(--space-4);
     border: 1px solid var(--color-border-strong);
-    border-radius: var(--radius-sm);
-    background: var(--color-bg);
+    border-radius: var(--radius-md);
+    background: var(--color-surface);
   }
 }
 
 .slot__label {
-  font-size: var(--font-size-lg);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
   font-family: var(--font-heading);
+  font-size: var(--font-size-xl);
   font-weight: var(--fw-semibold);
+
+  .slot--a & {
+    @include slot-letter(a);
+  }
+
+  .slot--b & {
+    @include slot-letter(b);
+  }
 }
 
 .slot__details {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   gap: var(--space-2);
 }
 
 .versus {
-  margin: calc(var(--space-2) * -1) 0;
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xl);
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  margin: calc(var(--space-4) * -1) auto;
+  border-radius: 50%;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+  color: var(--color-text);
   font-family: var(--font-heading);
+  font-size: var(--font-size-lg);
   font-weight: var(--fw-semibold);
-  text-align: center;
+  z-index: 1;
+}
+
+// Dois slots grandes lado a lado a partir do tablet.
+form.stack:has(> .slot) {
+  @include tablet {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-4);
+
+    > :not(.slot) {
+      grid-column: 1 / -1;
+    }
+
+    > .versus {
+      display: none;
+    }
+  }
 }
 
 .profile-picker {
@@ -1219,14 +1286,15 @@ $tones: danger, high, medium, success, muted, info, neutral;
   gap: var(--space-3);
   align-items: flex-start;
   min-height: var(--touch-target);
-  padding: var(--space-3);
-  border: 1px solid var(--color-border);
+  padding: var(--space-3) var(--space-4);
+  border: 1.5px solid var(--color-border);
   border-radius: var(--radius-md);
+  background: var(--color-surface);
   cursor: pointer;
 
   &:has(input:checked) {
     border-color: var(--color-text);
-    background: var(--color-surface);
+    background: var(--color-surface-muted);
   }
 
   input {
@@ -1252,30 +1320,42 @@ $tones: danger, high, medium, success, muted, info, neutral;
 .legend-slots {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: var(--space-2);
+  gap: var(--space-3);
 }
 
 .legend-slots__item {
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-3) var(--space-4);
   border-radius: var(--radius-md);
   background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
 
   dt {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
     color: var(--color-text-secondary);
     font-size: var(--font-size-xs);
     font-weight: var(--fw-medium);
   }
 
   dd {
+    margin-top: var(--space-1);
     font-weight: var(--fw-medium);
+    overflow-wrap: anywhere;
   }
 
-  &--a {
-    border-left: 4px solid var(--color-slot-a);
+  &--a dt {
+    @include slot-letter(a);
   }
 
-  &--b {
-    border-left: 4px solid var(--color-slot-b);
+  &--b dt {
+    @include slot-letter(b);
+  }
+
+  dt::before {
+    width: 1.5rem;
+    height: 1.5rem;
+    font-size: var(--font-size-sm);
   }
 }
 
@@ -1284,11 +1364,12 @@ $tones: danger, high, medium, success, muted, info, neutral;
   top: var(--topbar-height);
   z-index: 10;
   display: flex;
+  gap: var(--space-2);
   margin-inline: calc(var(--space-4) * -1);
-  padding-inline: var(--space-4);
-  border-bottom: 1px solid var(--color-border);
+  padding: var(--space-2) var(--space-4);
   background: var(--color-bg);
   overflow-x: auto;
+  scrollbar-width: none;
 
   @include tablet {
     margin-inline: 0;
@@ -1301,39 +1382,60 @@ $tones: danger, high, medium, success, muted, info, neutral;
 }
 
 .tabs__tab {
-  flex: 1 0 auto;
+  flex: 0 0 auto;
   min-height: var(--touch-target);
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-2) var(--space-5);
   border: 0;
-  border-bottom: 3px solid transparent;
+  border-radius: var(--radius-pill);
   background: transparent;
   color: var(--color-text-secondary);
   font-weight: var(--fw-medium);
   cursor: pointer;
 
+  &:hover {
+    background: rgba(0, 0, 0, 0.05);
+  }
+
+  // Aba ativa: pílula preta com sublinhado de acento amarelo.
   &[aria-selected='true'] {
-    border-bottom-color: var(--color-accent);
-    color: var(--color-text);
+    background: var(--color-primary);
+    color: var(--color-on-primary);
   }
 }
 
+// Conclusão em destaque: card grande, título e texto legíveis; a faixa lateral vem do tom do parecer.
 .decision {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
-  border-left: 4px solid var(--tone-success-edge);
+  gap: var(--space-4);
+  padding: var(--space-6);
+  border-radius: var(--radius-xl);
+  border-left: 6px solid var(--tone-success-edge);
+  box-shadow: var(--shadow-md);
 
   &--conditioned {
     border-left-color: var(--tone-medium-edge);
   }
+
+  p {
+    font-size: var(--font-size-lg);
+    line-height: 1.5;
+  }
+
+  .illustration {
+    width: 6rem;
+    margin-left: auto;
+  }
 }
 
+// Dois placares lado a lado, inclusive no celular; o número grande é o destaque.
 .score-grid {
   display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: var(--space-3);
 
   @include tablet {
-    grid-template-columns: 1fr 1fr;
+    gap: var(--space-4);
   }
 }
 
@@ -1341,32 +1443,55 @@ $tones: danger, high, medium, success, muted, info, neutral;
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  border-top: 4px solid var(--color-slot-a);
+  padding: var(--space-4);
+  border-top: 6px solid var(--color-slot-a);
+  border-radius: var(--radius-lg);
 
   &--b {
     border-top-color: var(--color-slot-b);
+  }
+
+  @include tablet {
+    padding: var(--space-6);
   }
 }
 
 .score-card__slot {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
+  gap: var(--space-2);
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
   font-weight: var(--fw-medium);
+
+  .score-card &::before {
+    @extend %slot-letter;
+    content: 'A' / '';
+    background: var(--color-slot-a);
+    color: var(--color-slot-a-text);
+  }
+
+  .score-card--b &::before {
+    content: 'B' / '';
+    background: var(--color-slot-b);
+    color: var(--color-slot-b-text);
+  }
 }
 
 .score-card__insurer {
-  font-size: var(--font-size-lg);
   font-family: var(--font-heading);
+  font-size: var(--font-size-lg);
   font-weight: var(--fw-semibold);
+  overflow-wrap: anywhere;
 }
 
 .score-card__facts {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
 
   dt {
     color: var(--color-text-secondary);
@@ -1374,24 +1499,44 @@ $tones: danger, high, medium, success, muted, info, neutral;
   }
 
   dd {
+    font-size: var(--font-size-sm);
     font-weight: var(--fw-medium);
+  }
+
+  @include tablet {
+    grid-template-columns: 1fr 1fr;
   }
 }
 
 .score-bar {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: var(--space-2);
 }
 
+// Número grande acima do rótulo.
 .score-bar__header {
   display: flex;
-  justify-content: space-between;
+  flex-direction: column-reverse;
   font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+
+  strong {
+    color: var(--color-text);
+    font-family: var(--font-heading);
+    font-size: var(--font-size-hero);
+    font-weight: var(--fw-semibold);
+    letter-spacing: -0.02em;
+    line-height: 1.05;
+
+    @include tablet {
+      font-size: var(--font-size-display);
+    }
+  }
 }
 
 .score-bar__track {
-  height: 0.625rem;
+  height: 0.5rem;
   border-radius: var(--radius-pill);
   background: var(--color-surface-strong);
   overflow: hidden;
@@ -1401,10 +1546,14 @@ $tones: danger, high, medium, success, muted, info, neutral;
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: var(--color-text);
+  background: var(--color-slot-a);
+
+  .score-card--b & {
+    background: var(--color-slot-b);
+  }
 
   .score-bar__track--secondary & {
-    background: var(--color-slot-b);
+    opacity: 0.55;
   }
 }
 
@@ -1412,19 +1561,19 @@ $tones: danger, high, medium, success, muted, info, neutral;
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-md);
 
   li + li {
     margin-top: var(--space-1);
   }
 
   &--attention {
-    border-left: 4px solid var(--tone-medium-edge);
+    border-left: 6px solid var(--tone-medium-edge);
   }
 }
 
 .summary-list__title {
-  font-size: var(--font-size-md);
+  font-size: var(--font-size-lg);
   font-family: var(--font-heading);
   font-weight: var(--fw-semibold);
 }
@@ -1434,7 +1583,9 @@ $tones: danger, high, medium, success, muted, info, neutral;
   flex-direction: column;
 
   strong {
+    font-family: var(--font-heading);
     font-size: var(--font-size-xl);
+    font-weight: var(--fw-semibold);
   }
 }
 
@@ -1470,7 +1621,7 @@ $tones: danger, high, medium, success, muted, info, neutral;
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  border-left-width: 5px;
+  border-left-width: 6px;
 
   @each $tone in danger, high, medium, success, muted {
     &--#{$tone} {
@@ -1492,7 +1643,7 @@ $tones: danger, high, medium, success, muted, info, neutral;
   gap: var(--space-1);
   padding: var(--space-3);
   border-radius: var(--radius-md);
-  background: var(--color-surface);
+  background: var(--color-surface-muted);
 }
 
 .side__label {
@@ -1537,7 +1688,7 @@ $tones: danger, high, medium, success, muted, info, neutral;
   h4 {
     font-size: var(--font-size-sm);
     font-family: var(--font-heading);
-  font-weight: var(--fw-semibold);
+    font-weight: var(--fw-semibold);
   }
 }
 
@@ -1583,7 +1734,7 @@ $tones: danger, high, medium, success, muted, info, neutral;
   }
 
   tr[aria-current='true'] {
-    background: var(--color-surface);
+    background: var(--color-surface-muted);
   }
 }
 
@@ -1606,7 +1757,7 @@ $tones: danger, high, medium, success, muted, info, neutral;
   gap: var(--space-3);
   padding: var(--space-3);
   border-radius: var(--radius-md);
-  background: var(--color-surface);
+  background: var(--color-surface-muted);
   color: var(--tone-success-text);
 
   &--warn {
@@ -1626,7 +1777,7 @@ $tones: danger, high, medium, success, muted, info, neutral;
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  border-left: 4px solid var(--color-accent);
+  border-left: 6px solid var(--color-text);
 }
 
 .answer__match {
@@ -1677,7 +1828,7 @@ $tones: danger, high, medium, success, muted, info, neutral;
     gap: var(--space-3);
     padding: var(--space-2) var(--space-3);
     border-radius: var(--radius-sm);
-    background: var(--color-surface);
+    background: var(--color-surface-muted);
   }
 
   dt {
@@ -1702,7 +1853,7 @@ $tones: danger, high, medium, success, muted, info, neutral;
   align-items: flex-end;
   justify-content: center;
   padding: var(--space-4);
-  background: rgba(22, 23, 26, 0.55);
+  background: rgba(0, 0, 0, 0.5);
 
   @include tablet {
     align-items: center;
@@ -1715,9 +1866,9 @@ $tones: danger, high, medium, success, muted, info, neutral;
   gap: var(--space-3);
   width: 100%;
   max-width: 28rem;
-  padding: var(--space-5);
-  border-radius: var(--radius-lg);
-  background: var(--color-bg);
+  padding: var(--space-6);
+  border-radius: var(--radius-xl);
+  background: var(--color-surface);
   box-shadow: var(--shadow-md);
 }
 
@@ -1754,9 +1905,40 @@ $tones: danger, high, medium, success, muted, info, neutral;
   gap: var(--space-2);
   align-items: center;
   padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   background: var(--tone-success-bg);
   color: var(--tone-success-text);
   font-size: var(--font-size-sm);
   font-weight: var(--fw-medium);
+}
+
+// ---------- Ilustrações (traço preto sobre creme) ----------
+
+.illustration {
+  display: block;
+  width: 100%;
+  height: auto;
+  color: var(--color-text);
+}
+
+.state-view .illustration {
+  width: min(13rem, 70%);
+  margin-bottom: var(--space-2);
+}
+
+.processing-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  text-align: center;
+
+  .illustration {
+    width: min(14rem, 65%);
+  }
+}
+
+.processing-art {
+  width: min(14rem, 65%);
+  margin: 0 auto;
 }

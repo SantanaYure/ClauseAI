@@ -2,6 +2,7 @@ import { paths } from '../../app/router';
 import { Badge } from '../../components/Badge';
 import { BrokerNotice } from '../../components/BrokerNotice';
 import { Icon, type IconName } from '../../components/Icon';
+import { Illustration } from '../../components/Illustration';
 import { clauseApi } from '../../services/api/clause-api';
 import { formatDateTime } from '../../shared/format';
 import { DECISION_MODE_LABELS } from '../../shared/labels';
@@ -91,6 +92,7 @@ export function HomePage() {
   return (
     <div className="page page--home">
       <section className="hero">
+        <Illustration name="welcome" className="hero__art" />
         <h1 className="hero__title">Compare apólices D&amp;O com clareza</h1>
         <p className="hero__subtitle">
           Envie os documentos, confira as evidências e veja as diferenças com pontuação explicável.

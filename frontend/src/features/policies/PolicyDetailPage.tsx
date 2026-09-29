@@ -106,11 +106,7 @@ function PolicyDetailView({ policy, concepts, back }: ViewProps) {
               {describeProcessing(policy.documents)} A página se atualiza sozinha.
             </span>
           </p>
-          <CancelExtractionButton
-            policyId={policy.id}
-            policyName={policy.name}
-            variant="block"
-          />
+          <CancelExtractionButton policyId={policy.id} policyName={policy.name} variant="block" />
         </div>
       )}
 
