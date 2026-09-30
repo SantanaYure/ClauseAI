@@ -1,0 +1,28 @@
+# Ambiente local e segredos: nunca entram na imagem.
+.venv/
+venv/
+.env
+.env.*
+keys/
+*.pem
+*.key
+*.json.key
+firebase-adminsdk-*.json
+service-account*.json
+
+# Dados locais, caches e artefatos
+.data/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+
+# Fora do runtime
+tests/
+scripts/
+Dockerfile
+.dockerignore
