@@ -15,7 +15,17 @@ from app.presentation.api.schemas.domain import PolicyDocumentResponse
 from app.shared.exceptions import ApplicationError, InfrastructureError
 from fastapi.testclient import TestClient
 
-from tests.fakes import PDF_BYTES, FakeExtractor, FakePdfReader, build_test_app, make_docx
+from tests.fakes import (
+    OWNER,
+    PDF_BYTES,
+    RETENTION,
+    FakeExtractor,
+    FakePdfReader,
+    auth_headers,
+    build_test_app,
+    make_docx,
+    make_quotas,
+)
 from tests.integration.test_api_flow import wait_for
 from tests.unit.test_ai_resilience import _ready_policy
 from tests.unit.test_docx_support import _command, _service
@@ -60,7 +70,7 @@ async def test_worker_failure_persists_code_and_retryable(
 
     await service.process_policy(policy.id)
 
-    document = (await service.get_policy(policy.id)).documents[0]
+    document = (await service.get_policy(OWNER, policy.id)).documents[0]
     assert document.status == DocumentStatus.FAILED
     assert (document.failure_code, document.failure_retryable) == (code, retryable)
     body = PolicyDocumentResponse.of(document).model_dump()
@@ -70,7 +80,7 @@ async def test_worker_failure_persists_code_and_retryable(
 
 def test_api_exposes_failure_fields_additively(tmp_path: Path) -> None:
     app = build_test_app(tmp_path, _FailingExtractor(ApplicationError("Falhou.", code="X_CODE")))
-    with TestClient(app) as client:
+    with TestClient(app, headers=auth_headers()) as client:
         created = client.post(
             "/api/v1/policies",
             data={"document_types": ["POLICY"]},
@@ -145,6 +155,8 @@ async def test_storage_failure_maps_to_503_without_creating_a_policy() -> None:
         docx_reader=PythonDocxTextReader(),
         event_bus=InMemoryEventBus(),
         limits=UploadLimits(max_file_bytes=1024 * 1024, max_files=5, min_evidence_confidence=0.7),
+        quotas=make_quotas(),
+        retention=RETENTION,
     )
 
     with pytest.raises(ApplicationError) as error:
@@ -153,4 +165,4 @@ async def test_storage_failure_maps_to_503_without_creating_a_policy() -> None:
     assert error.value.code == "STORAGE_UNAVAILABLE"
     assert error.value.status_code == 503
     assert storage.deleted == storage.puts  # first original is not left orphaned
-    assert await repository.list_recent(10) == []
+    assert await repository.list_recent(OWNER, 10) == []

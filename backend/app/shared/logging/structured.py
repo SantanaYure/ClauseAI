@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from app.shared.logging.context import get_log_context
+from app.shared.logging.privacy import error_fields
 
 
 class StructuredJsonFormatter(logging.Formatter):
@@ -20,8 +21,9 @@ class StructuredJsonFormatter(logging.Formatter):
             "message": record.getMessage(),
             **get_log_context(),
         }
-        if record.exc_info:
-            payload["exception"] = self.formatException(record.exc_info)
+        if record.exc_info and record.exc_info[1] is not None:
+            # Only type and frames: third-party messages may quote personal data.
+            payload.update(error_fields(record.exc_info[1]))
         return json.dumps(payload, ensure_ascii=False, default=str)
 
 

@@ -13,3 +13,9 @@ def conflict(code: str, message: str) -> ApplicationError:
 
 def invalid(code: str, message: str, status_code: int = 400) -> ApplicationError:
     return ApplicationError(message, code=code, status_code=status_code)
+
+
+def quota_exceeded(quota: str, message: str) -> ApplicationError:
+    return ApplicationError(
+        message, code="QUOTA_EXCEEDED", status_code=429, details={"quota": quota}
+    )

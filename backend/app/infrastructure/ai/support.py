@@ -120,7 +120,12 @@ async def call_with_retries[T](
             continue
         except (TransientProviderError, InvalidModelOutput) as exc:
             attempt += 1
-            with log_context(provider=provider, model=model, attempt=str(attempt), error=str(exc)):
+            with log_context(
+                provider=provider,
+                model=model,
+                attempt=str(attempt),
+                error_type=type(exc).__name__,
+            ):
                 logger.warning("AI call failed")
             if attempt >= max_attempts:
                 if isinstance(exc, InvalidModelOutput):

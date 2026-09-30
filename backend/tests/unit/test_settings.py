@@ -44,6 +44,8 @@ def test_firebase_storage_requires_bucket() -> None:
 
 
 def test_memory_mode_needs_no_firebase_credentials() -> None:
-    settings = Settings(_env_file=None, gemini_api_key="g", persistence_backend="memory")
+    settings = Settings(
+        _env_file=None, gemini_api_key="g", persistence_backend="memory", auth_backend="fake"
+    )
 
     assert settings.missing_required() == []

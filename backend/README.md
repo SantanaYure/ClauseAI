@@ -24,6 +24,8 @@ Sem essas variáveis o servidor não sobe e informa exatamente o que falta.
 - Os dados ficam no **Firestore**, que funciona no plano gratuito (Spark).
 - Os arquivos originais (PDF, DOCX, imagem) ficam em `backend/.data/uploads` (`STORAGE_BACKEND=local`, padrão). Para usar o Firebase Storage, que exige o plano Blaze, defina `STORAGE_BACKEND=firebase` e `FIREBASE_STORAGE_BUCKET`.
 - Para rodar sem Firebase (dados só em memória), use `PERSISTENCE_BACKEND=memory`; a chave do Gemini continua obrigatória, salvo no modo local abaixo.
+- Toda rota em `/api/v1` exige `Authorization: Bearer <ID token do Firebase>` (conta anônima criada pelo navegador). `AUTH_BACKEND=firebase` é o padrão e usa as mesmas credenciais do Firebase.
+- Cada apólice é apagada `RETENTION_HOURS` (padrão 24) horas após o envio. As cotas por navegador ficam em `MAX_ACTIVE_POLICIES_PER_OWNER`, `UPLOADS_PER_HOUR` e `COMPARISONS_PER_HOUR`.
 
 ### Rodar sem credenciais (modo local)
 
@@ -33,7 +35,10 @@ Para desenvolver ou testar a interface sem Gemini nem Firebase, use estas variá
 PERSISTENCE_BACKEND=memory
 STORAGE_BACKEND=local
 AI_PROVIDER=local
+AUTH_BACKEND=fake
 ```
+
+Com `AUTH_BACKEND=fake`, o token `Bearer dev-<uid>` identifica o navegador `<uid>` (ex.: `Authorization: Bearer dev-alice`). Recusado com `APP_ENV=production`.
 
 Com `AI_PROVIDER=local`, extrator, avaliador e redator são determinísticos e não chamam modelo. O extrator só lê texto nativo (PDF com texto e DOCX) e cita a linha que contém uma variante do catálogo. PDF escaneado e imagem não geram ocorrências. Os resultados servem para testar o fluxo, não têm valor de negócio. O modo é recusado com `APP_ENV=production`. Os dados somem ao reiniciar o servidor.
 

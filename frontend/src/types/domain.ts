@@ -96,6 +96,8 @@ export type PolicySummary = {
   status: PolicyStatus;
   documents: PolicyDocument[];
   alerts: string[];
+  /** Momento (ISO 8601 UTC) em que a apólice é apagada automaticamente. */
+  expiresAt?: string | null;
 };
 
 export type PolicyDetail = PolicySummary & {
@@ -206,6 +208,8 @@ export type ComparisonResult = {
   summary: ExecutiveSummary | null;
   qualityGate: QualityCheck[];
   failure: ApiFailure | null;
+  /** Expira junto com a apólice mais antiga envolvida (ISO 8601 UTC). */
+  expiresAt?: string | null;
 };
 
 export type ComparisonListItem = {
@@ -218,6 +222,7 @@ export type ComparisonListItem = {
   adherenceB: number | null;
   decisionMode: DecisionMode | null;
   failureReason?: string;
+  expiresAt?: string | null;
 };
 
 export type ConceptWithOccurrences = Concept & {
@@ -230,6 +235,13 @@ export type QueryAnswer = {
   answer: string;
   matches: { policy: ComparisonPolicyRef; occurrence: ConceptOccurrence | null }[];
   guidance: boolean;
+};
+
+/** Contagem dos dados deste navegador (GET /me/data/summary). */
+export type DataSummary = {
+  policies: number;
+  documents: number;
+  comparisons: number;
 };
 
 export type UploadFile = {

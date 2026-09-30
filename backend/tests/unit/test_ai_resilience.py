@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 from app.application.commands import CreateComparisonCommand
 from app.application.use_cases import ComparisonService
-from app.domain.entities import KnowledgeBase, Policy, PolicyDocument
+from app.domain.entities import KnowledgeBase, Policy, PolicyDocument, utc_now
 from app.domain.interfaces.ports import AssessmentRequest, DocumentContent
 from app.domain.services.scoring import ScoringParameters
 from app.domain.value_objects import (
@@ -30,10 +30,13 @@ from google.genai import errors as genai_errors
 from google.genai import types
 
 from tests.fakes import (
+    OWNER,
+    RETENTION,
     FakeExtractor,
     FakeSummaryWriter,
     RecordingExtractor,
     make_docx,
+    make_quotas,
 )
 from tests.unit.test_docx_support import _command, _service
 
@@ -106,7 +109,7 @@ async def test_provider_error_is_propagated_to_the_document(tmp_path: Path) -> N
 
     await service.process_policy(policy.id)
 
-    document = (await service.get_policy(policy.id)).documents[0]
+    document = (await service.get_policy(OWNER, policy.id)).documents[0]
     assert document.status == DocumentStatus.FAILED
     assert document.failure == "Chave inválida."
 
@@ -139,6 +142,7 @@ def test_local_provider_starts_without_any_credentials(tmp_path: Path) -> None:
     settings = Settings(
         _env_file=None,
         ai_provider="local",
+        auth_backend="fake",
         persistence_backend="memory",
         storage_backend="local",
         local_storage_dir=str(tmp_path),
@@ -198,6 +202,8 @@ async def _ready_policy(repo: InMemoryPolicyRepository, policy_id: str) -> None:
     await repo.save(
         Policy(
             id=policy_id,
+            owner_id=OWNER,
+            expires_at=utc_now() + RETENTION,
             insurer="X",
             name="Y",
             documents=[document],
@@ -221,9 +227,11 @@ async def test_comparison_degrades_to_partial_when_assessment_fails() -> None:
         summary_writer=FakeSummaryWriter(),
         event_bus=InMemoryEventBus(),
         parameters=ScoringParameters(),
+        quotas=make_quotas(),
     )
     created = await service.create_comparison(
         CreateComparisonCommand(
+            owner_id=OWNER,
             policy_a_id="pol_a",
             policy_b_id="pol_b",
             selected_profile=RiskProfile.FINANCIAL,
@@ -233,7 +241,7 @@ async def test_comparison_degrades_to_partial_when_assessment_fails() -> None:
 
     await service.run_comparison(created.id)
 
-    result = await service.get_comparison(created.id)
+    result = await service.get_comparison(OWNER, created.id)
     assert result.status == ComparisonStatus.PARTIAL
     assert result.failure is not None
     assert result.failure.code == "MODEL_UNAVAILABLE" and result.failure.retryable

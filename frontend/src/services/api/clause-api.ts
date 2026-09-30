@@ -3,6 +3,7 @@
 // são convertidas para os tipos camelCase de src/types/domain.ts.
 import { appConfig } from '../../config/env';
 import { friendlyMessage } from '../../shared/apiErrors';
+import type { IdentityPort } from '../auth/identity';
 import type {
   ComparisonListItem,
   ComparisonPolicyRef,
@@ -11,6 +12,7 @@ import type {
   ConceptId,
   ConceptOccurrence,
   ConceptWithOccurrences,
+  DataSummary,
   NewPolicyInput,
   PolicyDetail,
   PolicyStatus,
@@ -86,37 +88,79 @@ type ErrorEnvelope = {
 
 type RequestOptions = { timeoutMs?: number; timeoutCode?: string };
 
+// ---------- Identidade (Bearer) ----------
+
+const apiError = (code: string, fallback: string) =>
+  new ApiError(code, friendlyMessage(code, fallback));
+
+let identity: IdentityPort | null = null;
+
+/** Injeta a identidade anônima usada em todas as chamadas a /api/v1. */
+export function setIdentity(port: IdentityPort): void {
+  identity = port;
+}
+
+function requireIdentity(): IdentityPort {
+  if (!identity) throw apiError('IDENTITY_UNAVAILABLE', 'Identidade não configurada.');
+  return identity;
+}
+
+async function authorization(forceRefresh: boolean): Promise<string> {
+  const port = requireIdentity();
+  try {
+    await port.ready();
+    return `Bearer ${await port.getToken(forceRefresh)}`;
+  } catch {
+    throw apiError('IDENTITY_UNAVAILABLE', 'Não foi possível identificar este navegador.');
+  }
+}
+
+async function send(
+  path: string,
+  init: RequestInit,
+  bearer: string,
+  { timeoutMs, timeoutCode }: Required<RequestOptions>,
+): Promise<Response> {
+  try {
+    return await fetch(`${BASE_URL}${path}`, {
+      ...init,
+      headers: { Accept: 'application/json', ...init.headers, Authorization: bearer },
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'TimeoutError') {
+      throw apiError(timeoutCode, 'A API demorou demais.');
+    }
+    throw apiError('NETWORK_ERROR', 'Sem conexão.');
+  }
+}
+
+async function toApiError(response: Response): Promise<ApiError> {
+  const envelope = (await response.json().catch(() => ({}))) as ErrorEnvelope;
+  const code = envelope.error?.code ?? `HTTP_${response.status}`;
+  const detail = envelope.error?.message ?? 'A API não conseguiu atender a solicitação.';
+  return new ApiError(
+    code,
+    friendlyMessage(code, detail),
+    envelope.error?.correlation_id ?? null,
+    detail,
+  );
+}
+
+/** Chama a API com Bearer; num 401 renova o token uma vez e repete a chamada. */
 async function request<T>(
   path: string,
   init: RequestInit = {},
   { timeoutMs = appConfig.requestTimeoutMs, timeoutCode = 'REQUEST_TIMEOUT' }: RequestOptions = {},
 ): Promise<T> {
-  let response: Response;
-  try {
-    response = await fetch(`${BASE_URL}${path}`, {
-      ...init,
-      headers: { Accept: 'application/json', ...init.headers },
-      signal: AbortSignal.timeout(timeoutMs),
-    });
-  } catch (error) {
-    if (error instanceof DOMException && error.name === 'TimeoutError') {
-      throw new ApiError(timeoutCode, friendlyMessage(timeoutCode, 'A API demorou demais.'));
-    }
-    throw new ApiError('NETWORK_ERROR', friendlyMessage('NETWORK_ERROR', 'Sem conexão.'));
+  const options = { timeoutMs, timeoutCode };
+  let response = await send(path, init, await authorization(false), options);
+  if (response.status === 401) {
+    response = await send(path, init, await authorization(true), options);
+    if (response.status === 401) throw apiError('AUTH_EXPIRED', 'Identificação recusada.');
   }
 
-  if (!response.ok) {
-    const envelope = (await response.json().catch(() => ({}))) as ErrorEnvelope;
-    const code = envelope.error?.code ?? `HTTP_${response.status}`;
-    const detail = envelope.error?.message ?? 'A API não conseguiu atender a solicitação.';
-    throw new ApiError(
-      code,
-      friendlyMessage(code, detail),
-      envelope.error?.correlation_id ?? null,
-      detail,
-    );
-  }
-
+  if (!response.ok) throw await toApiError(response);
   if (response.status === 204) return undefined as T;
   return convertKeys(await response.json(), toCamel) as T;
 }
@@ -212,5 +256,22 @@ export const clauseApi = {
   async listComparisons(): Promise<ComparisonListItem[]> {
     const page = await request<Page<ComparisonListItem>>(`/comparisons?limit=${PAGE_LIMIT}`);
     return page.items;
+  },
+
+  /** Quantidade de dados guardados para este navegador (modal de exclusão total). */
+  getMyDataSummary(): Promise<DataSummary> {
+    return request('/me/data/summary');
+  },
+
+  /**
+   * Apaga tudo deste navegador no servidor e inicia um novo espaço anônimo.
+   * Se o novo espaço falhar, a tela de identidade assume (ver AuthGate).
+   */
+  async deleteMyData(): Promise<void> {
+    await request<void>('/me/data', { method: 'DELETE' });
+    await requireIdentity()
+      .reset()
+      .catch(() => undefined);
+    notifyChange();
   },
 };

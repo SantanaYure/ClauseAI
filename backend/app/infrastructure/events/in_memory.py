@@ -4,7 +4,7 @@ import asyncio
 from collections import defaultdict
 
 from app.domain.interfaces.events import Event, EventBus, EventHandler
-from app.shared.logging import get_logger, log_context
+from app.shared.logging import error_fields, get_logger, log_context, owner_ref
 
 
 class InMemoryEventBus(EventBus):
@@ -38,17 +38,20 @@ class InMemoryEventBus(EventBus):
             return
 
         failures: list[BaseException] = []
-        with log_context(event_id=event.event_id, correlation_id=event.correlation_id):
+        owner = event.payload.get("owner_id")
+        with log_context(
+            event_id=event.event_id,
+            correlation_id=event.correlation_id,
+            owner_ref=owner_ref(str(owner)) if owner else None,
+        ):
             results = await asyncio.gather(
                 *(handler(event) for handler in handlers),
                 return_exceptions=True,
             )
-        for result in results:
-            if isinstance(result, BaseException):
-                failures.append(result)
-                self._logger.exception(
-                    "Event handler failed",
-                    exc_info=(type(result), result, result.__traceback__),
-                )
+            for result in results:
+                if isinstance(result, BaseException):
+                    failures.append(result)
+                    with log_context(**error_fields(result)):
+                        self._logger.error("Event handler failed")
         if failures:
             raise failures[0]

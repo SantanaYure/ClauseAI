@@ -8,7 +8,9 @@ from app.application.commands import CreatePolicyCommand, UploadedFile
 from app.domain.value_objects import DocumentType
 from app.presentation.api.dependencies import (
     ApiServices,
+    Owner,
     correlation_id,
+    current_owner,
     get_services,
     get_settings,
 )
@@ -21,7 +23,7 @@ from app.presentation.api.schemas.domain import (
 from app.shared.config.settings import Settings
 from app.shared.exceptions import ApplicationError
 
-router = APIRouter(prefix="/policies", tags=["policies"])
+router = APIRouter(prefix="/policies", tags=["policies"], dependencies=[Depends(current_owner)])
 
 Services = Annotated[ApiServices, Depends(get_services)]
 Correlation = Annotated[str, Depends(correlation_id)]
@@ -29,6 +31,7 @@ Correlation = Annotated[str, Depends(correlation_id)]
 
 @router.post("", status_code=status.HTTP_202_ACCEPTED, response_model=PolicyCreatedResponse)
 async def create_policy(
+    owner: Owner,
     services: Services,
     correlation: Correlation,
     settings: Annotated[Settings, Depends(get_settings)],
@@ -56,11 +59,18 @@ async def create_policy(
         for file, document_type in zip(files, document_types, strict=True)
     ]
     policy = await services.policies.create_policy(
-        CreatePolicyCommand(insurer=insurer, name=name, files=uploaded, correlation_id=correlation)
+        CreatePolicyCommand(
+            owner_id=owner,
+            insurer=insurer,
+            name=name,
+            files=uploaded,
+            correlation_id=correlation,
+        )
     )
     return PolicyCreatedResponse(
         policy_id=policy.id,
         status=policy.status,
+        expires_at=policy.expires_at,
         document_ids=[d.id for d in policy.documents],
         correlation_id=correlation,
     )
@@ -68,26 +78,26 @@ async def create_policy(
 
 @router.get("", response_model=Page[PolicySummaryResponse])
 async def list_policies(
-    services: Services, limit: Annotated[int, Query(ge=1, le=100)] = 20
+    owner: Owner, services: Services, limit: Annotated[int, Query(ge=1, le=100)] = 20
 ) -> Page[PolicySummaryResponse]:
-    policies = await services.policies.list_policies(limit)
+    policies = await services.policies.list_policies(owner, limit)
     return Page(items=[PolicySummaryResponse.of(p) for p in policies])
 
 
 @router.post("/{policy_id}/cancel", response_model=PolicyDetailResponse)
-async def cancel_policy(policy_id: str, services: Services) -> PolicyDetailResponse:
+async def cancel_policy(policy_id: str, owner: Owner, services: Services) -> PolicyDetailResponse:
     """Cancel asynchronous extraction of a policy (SPEC-003)."""
 
-    return PolicyDetailResponse.of(await services.policies.cancel_policy(policy_id))
+    return PolicyDetailResponse.of(await services.policies.cancel_policy(owner, policy_id))
 
 
 @router.delete("/{policy_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_policy(policy_id: str, services: Services) -> None:
+async def delete_policy(policy_id: str, owner: Owner, services: Services) -> None:
     """Delete a policy, its evidence and its original files (SPEC-006)."""
 
-    await services.policies.delete_policy(policy_id)
+    await services.policies.delete_policy(owner, policy_id)
 
 
 @router.get("/{policy_id}", response_model=PolicyDetailResponse)
-async def get_policy(policy_id: str, services: Services) -> PolicyDetailResponse:
-    return PolicyDetailResponse.of(await services.policies.get_policy(policy_id))
+async def get_policy(policy_id: str, owner: Owner, services: Services) -> PolicyDetailResponse:
+    return PolicyDetailResponse.of(await services.policies.get_policy(owner, policy_id))

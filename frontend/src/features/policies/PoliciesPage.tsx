@@ -3,6 +3,7 @@ import { paths } from '../../app/router';
 import { FilterChips } from '../../components/FilterChips';
 import { Icon } from '../../components/Icon';
 import { PageHeader } from '../../components/PageHeader';
+import { PrivacyNote } from '../../components/PrivacyNote';
 import { SearchField } from '../../components/SearchField';
 import { EmptyState, ErrorState, LoadingState } from '../../components/StateViews';
 import { clauseApi } from '../../services/api/clause-api';
@@ -66,6 +67,10 @@ export function PoliciesPage() {
           {flash}
         </p>
       )}
+      <PrivacyNote icon="info">
+        Estas apólices estão guardadas só neste navegador. Em outro navegador, aparelho ou janela
+        anônima fechada, elas não aparecem. <a href={paths.privacy}>Privacidade e dados</a>
+      </PrivacyNote>
       <SearchField
         label="Buscar apólices"
         placeholder="Buscar por seguradora, número ou arquivo"
@@ -110,7 +115,7 @@ function PolicyList({ policies, onDeleted }: PolicyListProps) {
         icon="policy"
         illustration="empty"
         title="Nenhuma apólice encontrada"
-        text="Ajuste a busca ou adicione uma apólice com seus documentos."
+        text="Ajuste a busca ou adicione uma apólice com seus documentos. Apólices enviadas em outro navegador não aparecem aqui."
         action={
           <a className="btn btn--secondary" href={paths.newPolicy}>
             Adicionar apólice

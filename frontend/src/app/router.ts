@@ -11,6 +11,7 @@ export type Route =
   | { name: 'concepts'; query?: string }
   | { name: 'concept-detail'; conceptId: string }
   | { name: 'history' }
+  | { name: 'privacy' }
   | { name: 'not-found' };
 
 export type NavSection = 'home' | 'policies' | 'compare' | 'concepts' | 'history';
@@ -41,6 +42,8 @@ export function parseRoute(hash: string): Route {
         : { name: 'concepts', query: params.get('q') ?? undefined };
     case 'historico':
       return { name: 'history' };
+    case 'privacidade':
+      return { name: 'privacy' };
     default:
       return { name: 'not-found' };
   }
@@ -84,6 +87,7 @@ export const paths = {
     query ? `#/conceitos?q=${encodeURIComponent(query)}` : '#/conceitos',
   concept: (id: string) => `#/conceitos/${encodeURIComponent(id)}`,
   history: '#/historico',
+  privacy: '#/privacidade',
 };
 
 export function navigate(path: string): void {

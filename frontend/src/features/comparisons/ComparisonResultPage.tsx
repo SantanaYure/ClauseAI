@@ -1,5 +1,6 @@
 import { paths } from '../../app/router';
 import { BrokerNotice } from '../../components/BrokerNotice';
+import { ExpiryNote } from '../../components/ExpiryNote';
 import { PageHeader } from '../../components/PageHeader';
 import { ErrorState, LoadingState } from '../../components/StateViews';
 import { clauseApi } from '../../services/api/clause-api';
@@ -80,6 +81,10 @@ function ComparisonView({
           title={title}
           subtitle={`Comparação de ${formatDateTime(comparison.createdAt)}`}
           back={back}
+        />
+        <ExpiryNote
+          expiresAt={comparison.expiresAt}
+          format={(phrase) => `Esta comparação expira ${phrase}.`}
         />
 
         <dl className="legend-slots">

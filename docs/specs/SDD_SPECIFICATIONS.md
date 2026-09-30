@@ -4,7 +4,7 @@
 
 Cada spec segue `SPEC → critérios de aceite → contrato → testes → implementação futura`. Uma implementação só está pronta quando os critérios de aceite passam e a documentação de contrato permanece consistente. `PENDING_BUSINESS_VALIDATION` é uma saída válida e rastreável, nunca uma lacuna a ser preenchida por suposição.
 
-Regras de domínio (conceitos, pesos, escalas, pareceres, perfis, cores e frase “Consulte seu corretor de seguros.”) vêm de [`domain/DO_KNOWLEDGE_BASE.md`](../domain/DO_KNOWLEDGE_BASE.md). As specs SPEC-015 a SPEC-019 cobrem normalização, pontuação, decisão, consulta por conceito e controle de qualidade.
+Regras de domínio (conceitos, pesos, escalas, pareceres, perfis, cores e frase “Consulte seu corretor de seguros.”) vêm de [`domain/DO_KNOWLEDGE_BASE.md`](../domain/DO_KNOWLEDGE_BASE.md). As specs SPEC-015 a SPEC-019 cobrem normalização, pontuação, decisão, consulta por conceito e controle de qualidade. A SPEC-020 cobre isolamento por navegador, retenção e privacidade, e vale para todas as outras.
 
 | Etapa do desafio | Specs |
 |---|---|
@@ -24,6 +24,7 @@ Regras de domínio (conceitos, pesos, escalas, pareceres, perfis, cores e frase 
 - Operações demoradas retornam `202` e status consultável.
 - Handlers verificam `processed_events`/chave de processamento antes de efeitos não idempotentes.
 - Falhas têm `code`, `retryable`, `attempt` e mensagem sanitizada.
+- Toda rota em `/api/v1` exige `Authorization: Bearer <Firebase ID token>` e só enxerga dados do dono do token (SPEC-020).
 
 ---
 
@@ -95,11 +96,11 @@ DOCX e PDF são lidos já no upload. Um DOCX que não abre gera `DOCX_CORRUPTED`
 
 ### Fora de escopo
 
-Antivírus avançado, autenticação e parecer jurídico.
+Antivírus avançado, cadastro de usuário e parecer jurídico. A identidade anônima por navegador está na SPEC-020.
 
 ### Questões abertas
 
-Tamanho máximo, formatos de imagem além de JPG e PNG e política de retenção: `PENDING_BUSINESS_VALIDATION`/configuração operacional.
+Tamanho máximo e formatos de imagem além de JPG e PNG: `PENDING_BUSINESS_VALIDATION`/configuração operacional. Retenção: 24 horas após o envio (SPEC-020).
 
 ### Testes futuros
 
@@ -137,7 +138,7 @@ Versionamento de arquivos pelo usuário e edição do original.
 
 ### Questões abertas
 
-Retenção, criptografia adicional e limite de páginas (para DOCX, limite de blocos): `PENDING_BUSINESS_VALIDATION`.
+Criptografia adicional e limite de páginas (para DOCX, limite de blocos): `PENDING_BUSINESS_VALIDATION`. Retenção: 24 horas após o envio, com os arquivos sob o prefixo `owners/{uid}/` (SPEC-020).
 
 ### Testes futuros
 
@@ -262,7 +263,7 @@ Vínculo a conceitos (SPEC-015), pontuação (SPEC-016) e aconselhamento jurídi
 
 ### Questões abertas
 
-Limite de páginas/tokens (e de blocos no DOCX) e política de retenção do raw response. O limite de 3.500 caracteres por bloco é parâmetro técnico fixo do backend, sem validação de negócio.
+Limite de páginas/tokens (e de blocos no DOCX). Retenção: todo dado da apólice expira 24 horas após o envio (SPEC-020). O limite de 3.500 caracteres por bloco é parâmetro técnico fixo do backend, sem validação de negócio.
 
 ### Testes futuros
 
@@ -326,7 +327,7 @@ Não retornar policy em estado não pronto como se fosse final; usar `409 POLICY
 ### Critérios de aceite
 
 - Policy existente retorna dados e origem.
-- ID inexistente retorna `404` com envelope padrão.
+- ID inexistente ou de outro dono retorna o mesmo `404` com envelope padrão (SPEC-020).
 - Lista pagina sem carregar todos os registros.
 - DTO não expõe raw response nem segredo.
 - Exclusão remove registro, evidências e arquivos; nova consulta retorna `404`.
@@ -917,6 +918,7 @@ Responder só com evidências armazenadas; cada resposta traz conceito, termo, t
 - Busca por variante encontra o conceito-base correspondente.
 - Resposta sem evidência não é exibida como fato.
 - Paginação e limites respeitados.
+- Ocorrências e respostas usam só apólices do dono do token (SPEC-020).
 
 ### Fora de escopo
 
@@ -966,3 +968,145 @@ Nenhuma.
 ### Testes futuros
 
 Um caso por verificação negativa.
+
+## SPEC-020 — Isolamento por navegador, retenção e privacidade
+
+### Objetivo e contexto
+
+Cada visitante vê só os próprios dados, sem cadastro, e os dados somem 24 horas após o envio (ADR-027 e ADR-028). Antes, local e produção compartilhavam o Firestore e todo visitante via tudo.
+
+### Comportamento, entradas e saídas
+
+**Identidade.** O frontend cria uma identidade anônima do Firebase (`signInAnonymously`, persistência local do navegador) antes de qualquer chamada à API. Toda rota em `/api/v1` exige `Authorization: Bearer <ID token>`. Requisição sem esse cabeçalho é recusada com `401` antes de o corpo ser lido. `/health` é público. O `uid` do token é o dono (`owner_id`) de tudo o que ele criar.
+
+**Isolamento.**
+
+- Listas e consultas retornam só registros do dono. Registro sem `owner_id` não aparece para ninguém.
+- Recurso de outro dono ou inexistente responde o mesmo `404`, nunca `403`.
+- Comparação só entre apólices do mesmo dono; senão, `404 POLICY_NOT_FOUND`.
+- `GET /concepts/{id}/occurrences` e `POST /queries` usam só apólices do dono. `GET /concepts` e `GET /concepts/{id}` também exigem token.
+- `owner_id` é persistido, mas nunca aparece nas respostas.
+
+**Retenção.** A apólice expira 24 horas após o envio, sem renovação. A comparação expira com a apólice mais antiga envolvida (menor `expires_at`). Policy e Comparison expõem `expires_at` (ISO 8601 UTC), inclusive nas respostas `202` de criação (`PolicyCreatedResponse` e `ComparisonCreatedResponse`). `GET /comparisons/{id}` usa DTO próprio (`ComparisonResponse`), sem `owner_id`. Toda leitura filtra itens expirados. O `RetentionSweeper` roda no startup e a cada 15 minutos e apaga documentos, ocorrências e arquivos expirados. O TTL nativo do Firestore não está ativo (exige plano Blaze); `expires_at` é gravado como timestamp nativo para permitir ligá-lo depois. No Render gratuito, o workflow `retention-keepalive` chama `GET /health` de hora em hora, o que acorda o serviço e dispara a varredura. Pior caso: dado expirado guardado por cerca de 1 hora após o vencimento, sem aparecer em nenhuma resposta.
+
+**Arquivos.** Os originais ficam em `owners/{uid}/policies/{policy_id}/{document_id}.{ext}`. Apagar os dados de um dono é apagar o prefixo `owners/{uid}/`.
+
+**Exclusão de dados.**
+
+- `GET /api/v1/me/data/summary` → `200 {"policies": N, "documents": N, "comparisons": N}`. Alimenta o modal de confirmação.
+- `DELETE /api/v1/me/data` → `204`, idempotente. Verifica revogação do token (`check_revoked=True`). Cancela processamentos do dono e apaga comparações, apólices, ocorrências, arquivos (`owners/{uid}/...`) e a conta anônima.
+
+**Cotas por dono.** `429 QUOTA_EXCEEDED`, mensagem em português e `details.quota` com o limite atingido:
+
+| Limite | `details.quota` | Variável | Padrão |
+|---|---|---|---|
+| Apólices ativas | `active_policies` | `MAX_ACTIVE_POLICIES_PER_OWNER` | 20 |
+| Envios por hora | `uploads_per_hour` | `UPLOADS_PER_HOUR` | 10 |
+| Comparações por hora | `comparisons_per_hour` | `COMPARISONS_PER_HOUR` | 20 |
+
+O controle de taxa fica em memória e vale para instância única.
+
+**Configuração do backend.**
+
+| Variável | Padrão | Uso |
+|---|---|---|
+| `AUTH_BACKEND` | `firebase` | `firebase` ou `fake`. `fake` aceita `Bearer dev-<uid>` e é recusado com `APP_ENV=production` |
+| `AUTH_CLOCK_SKEW_SECONDS` | `10` | Tolerância de relógio na verificação do token (0 a 60) |
+| `RETENTION_HOURS` | `24` | Prazo de expiração da apólice |
+| `RETENTION_SWEEP_MINUTES` | `15` | Intervalo do `RetentionSweeper` |
+| `MAX_ACTIVE_POLICIES_PER_OWNER`, `UPLOADS_PER_HOUR`, `COMPARISONS_PER_HOUR` | 20, 10, 20 | Cotas acima |
+
+### Dependências
+
+Firebase Authentication (provedor Anonymous), porta `IdentityVerifier` (adapters `FirebaseIdentityVerifier` e `FakeIdentityVerifier`), dependência `current_owner`, repositórios com `list_recent(owner_id, limit)`, `delete_all_for_owner(owner_id)` e `list_expired(before, limit)`, `BlobStorage.delete_prefix`, `RetentionSweeper`. No frontend: porta `IdentityPort` (`src/services/auth/identity.ts`), implementações `firebaseIdentity.ts` e `devIdentity.ts` (modo `VITE_AUTH_MODE=dev`) e `AuthGate`.
+
+### Regras e erros
+
+| Situação | HTTP | Código |
+|---|---|---|
+| Sem cabeçalho ou cabeçalho malformado (recusado antes de ler o corpo) | 401 | `AUTH_REQUIRED` |
+| Corpo acima de `max_files` × `MAX_UPLOAD_MB` + margem | 413 | `FILE_TOO_LARGE` (margem de 1 MiB para o multipart) |
+| Token expirado | 401 | `AUTH_TOKEN_EXPIRED` |
+| Token inválido | 401 | `AUTH_TOKEN_INVALID` |
+| Token revogado | 401 | `AUTH_TOKEN_REVOKED` |
+| Falha ao buscar os certificados do Firebase | 503 | `AUTH_UNAVAILABLE`, `details.retryable = true` |
+| Recurso de outro dono ou inexistente | 404 | código do recurso (ex.: `POLICY_NOT_FOUND`) |
+| Cota excedida | 429 | `QUOTA_EXCEEDED`, `details.quota` |
+
+- Os 401 usam o envelope de erro padrão e o header `WWW-Authenticate: Bearer`, sem detalhes do Firebase.
+- Frontend em desenvolvimento: com `VITE_AUTH_MODE=dev`, e só em `npm run dev`, o frontend dispensa o Firebase e envia `Bearer dev-<id>` (id aleatório guardado no navegador). Funciona com o backend em `AUTH_BACKEND=fake`. No build de produção a variável é ignorada.
+- Eventos carregam `owner_id`; o handler descarta evento cujo dono diverge da entidade e não regrava entidade apagada durante o processamento.
+- Frontend: `request()` espera a identidade ficar pronta e envia o Bearer. Em `401`, renova o token uma vez e repete; segundo `401` vira `ApiError('AUTH_EXPIRED')`. `/health` vai sem header. O token nunca vai para log.
+- Logs não trazem token, nome de arquivo, seguradora, texto extraído nem mensagem crua de exceção da IA ou do leitor de PDF. O dono aparece como `owner_ref` (12 primeiros caracteres do SHA-256 do `uid`). `X-Correlation-ID` fora de `[A-Za-z0-9-]{1,64}` é trocado por um novo.
+- Dados legados sem `owner_id` são apagados por `backend/scripts/purge_legacy.py` (dry-run por padrão, `--apply` para apagar).
+
+### Interface
+
+Termo fixo: "neste navegador". Nunca "conta", "login" ou "sessão".
+
+| Onde | Texto |
+|---|---|
+| Envio, acima do botão Enviar, com ícone de cadeado | "Seus arquivos ficam visíveis só neste navegador e são apagados automaticamente 24 horas após o envio. A leitura é feita por IA do Google (Gemini). [Como tratamos seus dados]" |
+| Lista de apólices, faixa informativa neutra, sem botão de fechar | "Estas apólices estão guardadas só neste navegador. Em outro navegador, aparelho ou janela anônima fechada, elas não aparecem. [Privacidade e dados]" |
+| Card da apólice | "Expira em X horas" ou "Expira em menos de 1 hora". Estilo de atenção existente quando faltam 2 horas ou menos |
+| Lista vazia (acréscimo) | "Apólices enviadas em outro navegador não aparecem aqui." |
+| Resultado da comparação | "Esta comparação expira em X horas." |
+
+O aviso de expiração não cria cores novas e nunca usa as cores de parecer.
+
+**Página `/privacidade` ("Privacidade e dados")**, com link fixo no rodapé de todas as telas:
+
+- Para quê: usamos seus arquivos apenas para extrair coberturas e comparar apólices. Não usamos para outro fim nem vendemos dados.
+- Quem processa: o texto dos documentos é enviado ao Google Gemini (serviço de IA de terceiro) para a extração.
+- Onde fica: seus dados ficam ligados a este navegador, sem cadastro. Outros visitantes não os veem.
+- Por quanto tempo: 24 horas após o envio. Depois, tudo é apagado automaticamente.
+- Seus direitos: você pode apagar tudo agora, no botão abaixo. Dúvidas ou outros pedidos previstos na LGPD: yure.s.santana@outlook.com.
+- Evite enviar documentos com dados pessoais que não sejam necessários para a comparação.
+
+**Apagar dados.** Botão "Apagar todos os meus dados" (destrutivo secundário).
+
+| Estado | Comportamento |
+|---|---|
+| Modal | Título "Apagar tudo deste navegador?". Texto "Serão apagadas N apólices, N documentos e N comparações. Isso não pode ser desfeito. Envios em processamento serão cancelados." Botões "Cancelar" (foco inicial) e "Apagar tudo" |
+| Durante | "Apagando…", desabilitado |
+| Sucesso | Vai para Apólices (vazia) com o aviso "Seus dados foram apagados deste navegador e dos nossos servidores." e cria nova identidade anônima (signOut e novo signIn) |
+| Erro | "Não conseguimos apagar tudo agora. Tente de novo em instantes." |
+
+**Falha ao criar a identidade (`AuthGate`).** Tela cheia, sem nenhuma chamada à API e sem botão de envio. Título "Não conseguimos criar seu espaço privado". Texto "Seu navegador está bloqueando o armazenamento local (cookies ou dados de sites). Sem ele, não temos como manter suas apólices privadas. Libere o armazenamento para este site ou use outro navegador." Botão "Tentar de novo" e link "Por que isso é necessário?" para `/privacidade`.
+
+As cores de notificação e a frase "Consulte seu corretor de seguros." não mudam.
+
+### Critérios de aceite
+
+- Requisição sem token, com token malformado, expirado, inválido ou revogado recebe o `401` da tabela, com `WWW-Authenticate: Bearer`. `/health` responde sem token.
+- `AUTH_BACKEND=fake` com `APP_ENV=production` impede o backend de subir.
+- Dono B recebe `404` ao ler, apagar ou comparar apólice do dono A, e ao ler comparação do dono A. A resposta é igual à de ID inexistente.
+- Listas, ocorrências por conceito e `POST /queries` não trazem dados de outro dono. Registro sem `owner_id` não aparece.
+- Nenhuma resposta contém `owner_id`, inclusive `GET /comparisons/{id}`. Policy e Comparison trazem `expires_at`, também nas respostas `202` de criação.
+- `expires_at` da apólice é o envio + 24 h; o da comparação é o menor `expires_at` das duas apólices.
+- O sweeper apaga documentos, ocorrências e arquivos expirados e não toca nos que ainda valem.
+- Item expirado e ainda não apagado não aparece em nenhuma leitura.
+- Requisição a `/api/v1/*` sem `Authorization: Bearer` recebe `401` sem que o corpo seja lido.
+- Corpo acima de `max_files` × `MAX_UPLOAD_MB` + margem recebe `413 FILE_TOO_LARGE`.
+- `DELETE /me/data` apaga só os dados do dono, cancela processamentos dele, remove a conta anônima e responde `204` também na segunda chamada.
+- `GET /me/data/summary` devolve as contagens do dono.
+- Com os padrões, a 21ª apólice ativa, o 11º envio na hora e a 21ª comparação na hora recebem `429 QUOTA_EXCEEDED`, com `details.quota` igual a `active_policies`, `uploads_per_hour` e `comparisons_per_hour`.
+- Falha ao buscar os certificados do Firebase responde `503 AUTH_UNAVAILABLE` com `details.retryable = true`.
+- Os arquivos de um dono ficam sob `owners/{uid}/`.
+- `purge_legacy.py` sem `--apply` só lista; com `--apply`, apaga os registros e arquivos sem `owner_id`.
+- Logs não contêm token, nome de arquivo, seguradora nem texto extraído.
+- Toda chamada do frontend à API, exceto `/health`, leva Bearer. `401` renova uma vez; o segundo vira `AUTH_EXPIRED`.
+- Com armazenamento bloqueado, o `AuthGate` mostra a tela de falha e nenhuma chamada à API é feita.
+- Os textos da interface seguem a seção Interface.
+
+### Fora de escopo
+
+Cadastro com e-mail ou senha, recuperar dados em outro navegador, exportação dos dados e retenção configurável pelo usuário.
+
+### Questões abertas
+
+App Check e Identity Platform (limite de criação de contas anônimas) ficam como próximos passos (ROADMAP). Cotas em memória não valem para mais de uma instância.
+
+### Testes futuros
+
+IDOR (404 em leitura, exclusão e comparação cruzada), 401 parametrizado, conceitos e consultas sem vazamento, exclusão total idempotente e só do dono, sweeper, purge legado (dry-run e `--apply`), `fake` recusado em produção, logs sem dados pessoais (`caplog`), CORS e headers de segurança, `429` de cota. Frontend: Bearer em toda chamada, renovação em `401`, `AuthGate` e fluxo de apagar.

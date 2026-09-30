@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 from app.application.use_cases import PolicyService, UploadLimits
-from app.domain.entities import Policy, PolicyDocument
+from app.domain.entities import Policy, PolicyDocument, utc_now
 from app.domain.value_objects import DocumentStatus, DocumentType, FileKind, PolicyStatus
 from app.infrastructure.events import InMemoryEventBus
 from app.infrastructure.knowledge_base import JsonConceptCatalog
@@ -11,7 +11,7 @@ from app.infrastructure.storage import LocalBlobStorage
 from app.infrastructure.word import PythonDocxTextReader
 from app.shared.exceptions import ApplicationError
 
-from tests.fakes import FakeExtractor, FakePdfReader
+from tests.fakes import OWNER, RETENTION, FakeExtractor, FakePdfReader, make_quotas
 
 
 def _make_service(tmp_path: Path) -> tuple[PolicyService, InMemoryPolicyRepository]:
@@ -25,6 +25,8 @@ def _make_service(tmp_path: Path) -> tuple[PolicyService, InMemoryPolicyReposito
         docx_reader=PythonDocxTextReader(),
         event_bus=InMemoryEventBus(),
         limits=UploadLimits(max_file_bytes=1024, max_files=5, min_evidence_confidence=0.7),
+        quotas=make_quotas(),
+        retention=RETENTION,
     )
     return service, repository
 
@@ -46,6 +48,8 @@ async def test_canceling_processing_policy_sets_cancelled_status(tmp_path: Path)
     )
     await repository.save(
         Policy(
+            owner_id=OWNER,
+            expires_at=utc_now() + RETENTION,
             id="pol_1",
             insurer="X",
             name="Y",
@@ -55,7 +59,7 @@ async def test_canceling_processing_policy_sets_cancelled_status(tmp_path: Path)
         )
     )
 
-    cancelled = await service.cancel_policy("pol_1")
+    cancelled = await service.cancel_policy(OWNER, "pol_1")
 
     assert cancelled.status == PolicyStatus.CANCELLED
     assert cancelled.documents[0].status == DocumentStatus.CANCELLED
@@ -69,6 +73,8 @@ async def test_canceling_non_processing_policy_raises_error(tmp_path: Path) -> N
     service, repository = _make_service(tmp_path)
     await repository.save(
         Policy(
+            owner_id=OWNER,
+            expires_at=utc_now() + RETENTION,
             id="pol_ready",
             insurer="X",
             name="Y",
@@ -78,7 +84,7 @@ async def test_canceling_non_processing_policy_raises_error(tmp_path: Path) -> N
     )
 
     with pytest.raises(ApplicationError) as exc_info:
-        await service.cancel_policy("pol_ready")
+        await service.cancel_policy(OWNER, "pol_ready")
 
     assert exc_info.value.code == "POLICY_NOT_PROCESSING"
 
@@ -100,6 +106,8 @@ async def test_cancelled_policy_can_be_deleted(tmp_path: Path) -> None:
     )
     await repository.save(
         Policy(
+            owner_id=OWNER,
+            expires_at=utc_now() + RETENTION,
             id="pol_1",
             insurer="X",
             name="Y",
@@ -109,5 +117,5 @@ async def test_cancelled_policy_can_be_deleted(tmp_path: Path) -> None:
         )
     )
 
-    await service.delete_policy("pol_1")
+    await service.delete_policy(OWNER, "pol_1")
     assert await repository.get("pol_1") is None

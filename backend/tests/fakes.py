@@ -1,14 +1,23 @@
-"""Test doubles for the AI ports. They exist only in tests; the app never uses them."""
+"""Test doubles for the AI ports and helpers to build an authenticated test app.
+
+The AI doubles exist only in tests. The identity fake is the app's own
+`AUTH_BACKEND=fake` adapter: a request with `Bearer dev-<uid>` acts as `<uid>`.
+"""
 
 import io
+from dataclasses import dataclass
+from datetime import timedelta
 from pathlib import Path
 
+from app.application.quotas import QuotaGuard, QuotaLimits
 from app.application.use_cases import (
     COMPARISON_REQUESTED,
     POLICY_UPLOADED,
     ComparisonService,
     ConceptService,
+    OwnerDataService,
     PolicyService,
+    RetentionSweeper,
     UploadLimits,
 )
 from app.domain.entities import (
@@ -30,9 +39,11 @@ from app.domain.value_objects import (
     OccurrenceType,
     TermRelation,
 )
+from app.infrastructure.auth import FakeAccountRemover, FakeIdentityVerifier
 from app.infrastructure.events import QueuedEventBus
 from app.infrastructure.knowledge_base import JsonConceptCatalog
 from app.infrastructure.persistence import InMemoryComparisonRepository, InMemoryPolicyRepository
+from app.infrastructure.quotas import SlidingWindowRateLimiter
 from app.infrastructure.storage import LocalBlobStorage
 from app.infrastructure.word import PythonDocxTextReader
 from app.presentation.api.app import create_app
@@ -40,6 +51,20 @@ from app.presentation.api.dependencies import ApiServices
 from app.shared.config.settings import Settings
 from docx import Document
 from fastapi import FastAPI
+
+OWNER = "alice"
+RETENTION = timedelta(hours=24)
+GENEROUS_LIMITS = QuotaLimits(max_active_policies=50, uploads_per_hour=50, comparisons_per_hour=50)
+
+
+def auth_headers(uid: str = OWNER) -> dict[str, str]:
+    """Bearer header accepted by the fake identity verifier."""
+
+    return {"Authorization": f"Bearer dev-{uid}"}
+
+
+def make_quotas(limits: QuotaLimits = GENEROUS_LIMITS) -> QuotaGuard:
+    return QuotaGuard(SlidingWindowRateLimiter(), limits)
 
 
 def occurrence(
@@ -161,29 +186,59 @@ class FakePdfReader:
         return PdfText(page_count=2, page_texts={})
 
 
-def build_test_app(tmp_path: Path, extractor: FakeExtractor | None = None) -> FastAPI:
-    settings = Settings(_env_file=None, persistence_backend="memory")
+@dataclass(frozen=True, slots=True)
+class AppRuntime:
+    """The adapters behind a test app, for assertions that bypass HTTP."""
+
+    policies: InMemoryPolicyRepository
+    comparisons: InMemoryComparisonRepository
+    storage: LocalBlobStorage
+    accounts: FakeAccountRemover
+    identity: FakeIdentityVerifier
+    sweeper: RetentionSweeper
+
+
+def build_test_app(
+    tmp_path: Path,
+    extractor: FakeExtractor | None = None,
+    *,
+    quota_limits: QuotaLimits = GENEROUS_LIMITS,
+    settings: Settings | None = None,
+) -> FastAPI:
+    """Full API on in-memory adapters; `app.state.runtime` exposes an `AppRuntime`."""
+
+    settings = settings or Settings(
+        _env_file=None, persistence_backend="memory", auth_backend="fake"
+    )
     bus = QueuedEventBus(workers=1)
     policies = InMemoryPolicyRepository()
+    comparisons = InMemoryComparisonRepository()
+    storage = LocalBlobStorage(tmp_path)
+    accounts = FakeAccountRemover()
+    identity = FakeIdentityVerifier()
+    quotas = make_quotas(quota_limits)
     catalog = JsonConceptCatalog()
     policy_service = PolicyService(
         repository=policies,
-        storage=LocalBlobStorage(tmp_path),
+        storage=storage,
         catalog=catalog,
         extractor=extractor or FakeExtractor(),
         pdf_reader=FakePdfReader(),
         docx_reader=PythonDocxTextReader(),
         event_bus=bus,
         limits=UploadLimits(max_file_bytes=1024 * 1024, max_files=5, min_evidence_confidence=0.7),
+        quotas=quotas,
+        retention=RETENTION,
     )
     comparison_service = ComparisonService(
-        comparisons=InMemoryComparisonRepository(),
+        comparisons=comparisons,
         policies=policies,
         catalog=catalog,
         assessor=FakeAssessor(),
         summary_writer=FakeSummaryWriter(),
         event_bus=bus,
         parameters=ScoringParameters(),
+        quotas=quotas,
     )
     bus.subscribe(POLICY_UPLOADED, policy_service.handle_policy_uploaded)
     bus.subscribe(COMPARISON_REQUESTED, comparison_service.handle_comparison_requested)
@@ -191,8 +246,25 @@ def build_test_app(tmp_path: Path, extractor: FakeExtractor | None = None) -> Fa
         policies=policy_service,
         comparisons=comparison_service,
         concepts=ConceptService(catalog, policies),
+        owner_data=OwnerDataService(
+            policy_service=policy_service,
+            comparison_service=comparison_service,
+            policies=policies,
+            comparisons=comparisons,
+            storage=storage,
+            accounts=accounts,
+        ),
     )
-    return create_app(settings, bus, services)
+    app = create_app(settings, bus, services, identity_verifier=identity)
+    app.state.runtime = AppRuntime(
+        policies=policies,
+        comparisons=comparisons,
+        storage=storage,
+        accounts=accounts,
+        identity=identity,
+        sweeper=RetentionSweeper(policies, comparisons, storage),
+    )
+    return app
 
 
 PDF_BYTES = b"%PDF-1.4\n% documento de teste\n"

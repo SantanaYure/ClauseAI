@@ -3,6 +3,7 @@ import { paths } from '../../app/router';
 import { BrokerNotice } from '../../components/BrokerNotice';
 import { Icon } from '../../components/Icon';
 import { PageHeader } from '../../components/PageHeader';
+import { PrivacyNote } from '../../components/PrivacyNote';
 import { fileProblem, useNewPolicyForm } from '../../shared/useNewPolicyForm';
 import { useFocusFirstError } from '../../shared/useFocusFirstError';
 import { FileDropzone } from './FileDropzone';
@@ -106,6 +107,12 @@ export function NewPolicyPage() {
               : 'Nenhum arquivo válido para enviar. Troque ou remova os arquivos com problema.'}
           </p>
         )}
+
+        <PrivacyNote>
+          Seus arquivos ficam visíveis só neste navegador e são apagados automaticamente 24 horas
+          após o envio. A leitura é feita por IA do Google (Gemini).{' '}
+          <a href={paths.privacy}>Como tratamos seus dados</a>
+        </PrivacyNote>
 
         <button type="submit" className="btn btn--primary btn--block" disabled={!form.canSubmit}>
           {form.submitting

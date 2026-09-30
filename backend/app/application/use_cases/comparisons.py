@@ -1,9 +1,14 @@
-"""Comparison use cases (SPEC-007 to SPEC-009, SPEC-016, SPEC-017, SPEC-019)."""
+"""Comparison use cases (SPEC-007 to SPEC-009, SPEC-016, SPEC-017, SPEC-019).
+
+A comparison belongs to the owner of both policies and expires with the earliest of
+them. Someone else's comparison, or an expired one, answers exactly like a missing one.
+"""
 
 from uuid import uuid4
 
 from app.application.commands import CreateComparisonCommand
 from app.application.errors import conflict, invalid, not_found
+from app.application.quotas import QuotaGuard
 from app.domain.entities import (
     Comparison,
     ConceptOccurrence,
@@ -40,7 +45,7 @@ from app.domain.value_objects import (
     RiskProfile,
 )
 from app.shared.exceptions import ApplicationError
-from app.shared.logging import get_logger, log_context
+from app.shared.logging import error_fields, get_logger, log_context, owner_ref
 
 COMPARISON_REQUESTED = "ComparisonRequested"
 # Keeps each assessment request small enough for free-tier token limits.
@@ -72,6 +77,14 @@ def _ref(policy: Policy) -> PolicyRef:
     return PolicyRef(id=policy.id, insurer=policy.insurer, name=policy.name)
 
 
+class _ComparisonGone(Exception):
+    """The comparison was deleted while it was running."""
+
+
+def _comparison_not_found() -> ApplicationError:
+    return not_found("COMPARISON_NOT_FOUND", "Comparação não encontrada.")
+
+
 def _failure(exc: ApplicationError, prefix: str) -> Failure:
     return Failure(
         code=exc.code,
@@ -90,6 +103,7 @@ class ComparisonService:
         summary_writer: SummaryWriter,
         event_bus: EventBus,
         parameters: ScoringParameters,
+        quotas: QuotaGuard,
     ) -> None:
         self._comparisons = comparisons
         self._policies = policies
@@ -98,10 +112,11 @@ class ComparisonService:
         self._summary_writer = summary_writer
         self._event_bus = event_bus
         self._parameters = parameters
+        self._quotas = quotas
 
-    async def _ready_policy(self, policy_id: str) -> Policy:
+    async def _ready_policy(self, owner_id: str, policy_id: str) -> Policy:
         policy = await self._policies.get(policy_id)
-        if policy is None:
+        if policy is None or policy.owner_id != owner_id or policy.is_expired(utc_now()):
             raise not_found("POLICY_NOT_FOUND", "Apólice não encontrada.")
         if policy.status not in COMPARABLE_POLICY_STATUSES:
             raise conflict("POLICY_NOT_READY", "As duas apólices precisam estar processadas.")
@@ -110,10 +125,13 @@ class ComparisonService:
     async def create_comparison(self, command: CreateComparisonCommand) -> Comparison:
         if command.policy_a_id == command.policy_b_id:
             raise invalid("SAME_POLICY", "Escolha duas apólices diferentes.")
-        policy_a = await self._ready_policy(command.policy_a_id)
-        policy_b = await self._ready_policy(command.policy_b_id)
+        policy_a = await self._ready_policy(command.owner_id, command.policy_a_id)
+        policy_b = await self._ready_policy(command.owner_id, command.policy_b_id)
+        self._quotas.consume_comparison(command.owner_id)
         comparison = Comparison(
             id=f"cmp_{uuid4().hex[:16]}",
+            owner_id=command.owner_id,
+            expires_at=min(policy_a.expires_at, policy_b.expires_at),
             knowledge_base_version=self._catalog.load().version,
             selected_profile=command.selected_profile,
             policy_a=_ref(policy_a),
@@ -123,30 +141,54 @@ class ComparisonService:
         await self._comparisons.save(comparison)
         await self._event_bus.publish(
             Event.create(
-                COMPARISON_REQUESTED, command.correlation_id, {"comparison_id": comparison.id}
+                COMPARISON_REQUESTED,
+                command.correlation_id,
+                {"comparison_id": comparison.id, "owner_id": command.owner_id},
             )
         )
         return comparison
 
     async def handle_comparison_requested(self, event: Event) -> None:
-        await self.run_comparison(str(event.payload["comparison_id"]))
+        comparison_id = str(event.payload["comparison_id"])
+        owner_id = str(event.payload.get("owner_id") or "")
+        with log_context(comparison_id=comparison_id, owner_ref=owner_ref(owner_id)):
+            comparison = await self._comparisons.get(comparison_id)
+            if comparison is None or comparison.owner_id != owner_id:
+                logger.warning(
+                    "ComparisonRequested discarded: comparison missing or owner mismatch"
+                )
+                return
+            await self.run_comparison(comparison_id)
 
     async def run_comparison(self, comparison_id: str) -> None:
         comparison = await self._comparisons.get(comparison_id)
         if comparison is None or comparison.status in FINAL_COMPARISON_STATUSES:
             return  # idempotent
-        with log_context(comparison_id=comparison_id, correlation_id=comparison.correlation_id):
+        with log_context(
+            comparison_id=comparison_id,
+            correlation_id=comparison.correlation_id,
+            owner_ref=owner_ref(comparison.owner_id),
+        ):
             try:
-                await self._run(comparison)
-            except ApplicationError as exc:
-                await self._finish_failed(
-                    comparison, exc.code, exc.message, bool((exc.details or {}).get("retryable"))
-                )
-            except Exception:
-                logger.exception("Comparison failed")
-                await self._finish_failed(
-                    comparison, "UNEXPECTED_ERROR", "Falha inesperada ao comparar as apólices."
-                )
+                await self._run_or_fail(comparison)
+            except _ComparisonGone:
+                logger.info("Comparison aborted: comparison deleted")
+
+    async def _run_or_fail(self, comparison: Comparison) -> None:
+        try:
+            await self._run(comparison)
+        except _ComparisonGone:
+            raise
+        except ApplicationError as exc:
+            await self._finish_failed(
+                comparison, exc.code, exc.message, bool((exc.details or {}).get("retryable"))
+            )
+        except Exception as exc:
+            with log_context(**error_fields(exc)):
+                logger.error("Comparison failed")
+            await self._finish_failed(
+                comparison, "UNEXPECTED_ERROR", "Falha inesperada ao comparar as apólices."
+            )
 
     async def _run(self, comparison: Comparison) -> None:
         knowledge_base = self._catalog.load()
@@ -231,6 +273,10 @@ class ComparisonService:
         }
 
     async def _advance(self, comparison: Comparison, status: ComparisonStatus) -> None:
+        """Save progress, but never recreate a comparison erased meanwhile."""
+
+        if await self._comparisons.get(comparison.id) is None:
+            raise _ComparisonGone
         comparison.status = status
         await self._comparisons.save(comparison)
 
@@ -243,11 +289,22 @@ class ComparisonService:
 
     # ---------- Queries ----------
 
-    async def get_comparison(self, comparison_id: str) -> Comparison:
+    async def get_comparison(self, owner_id: str, comparison_id: str) -> Comparison:
         comparison = await self._comparisons.get(comparison_id)
-        if comparison is None:
-            raise not_found("COMPARISON_NOT_FOUND", "Comparação não encontrada.")
+        if (
+            comparison is None
+            or comparison.owner_id != owner_id
+            or comparison.is_expired(utc_now())
+        ):
+            raise _comparison_not_found()
         return comparison
 
-    async def list_comparisons(self, limit: int) -> list[Comparison]:
-        return await self._comparisons.list_recent(limit)
+    async def list_comparisons(self, owner_id: str, limit: int) -> list[Comparison]:
+        """The owner's comparisons that are still within the retention period."""
+
+        now = utc_now()
+        comparisons = await self._comparisons.list_recent(owner_id, limit)
+        return [c for c in comparisons if not c.is_expired(now)][:limit]
+
+    async def count_active(self, owner_id: str) -> int:
+        return await self._comparisons.count_active(owner_id, utc_now())

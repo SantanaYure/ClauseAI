@@ -27,6 +27,12 @@ services:
         value: local
       - key: FIREBASE_CREDENTIALS_PATH
         value: /etc/secrets/clauseai-firebase.json
+      # ID token do Firebase Auth (conta anônima do navegador); fake é recusado em produção.
+      - key: AUTH_BACKEND
+        value: firebase
+      # LGPD: apólices e comparações são apagadas 24 h após o envio.
+      - key: RETENTION_HOURS
+        value: "24"
       - key: AI_PROVIDER
         value: gemini
       - key: GEMINI_MODEL

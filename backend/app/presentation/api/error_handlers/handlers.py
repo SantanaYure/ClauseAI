@@ -5,13 +5,31 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from app.shared.exceptions import ApplicationError
-from app.shared.logging import get_logger
+from app.shared.logging import error_fields, get_logger, log_context
 
 logger = get_logger(__name__)
 
 
 def _correlation_id(request: Request) -> str:
     return getattr(request.state, "correlation_id", "unknown")
+
+
+def application_error_response(request: Request, exc: ApplicationError) -> JSONResponse:
+    """The standard error envelope; also used by middleware that answers before routing."""
+
+    headers = {"WWW-Authenticate": "Bearer"} if exc.status_code == 401 else None
+    return JSONResponse(
+        status_code=exc.status_code,
+        headers=headers,
+        content={
+            "error": {
+                "code": exc.code,
+                "message": exc.message,
+                "correlation_id": _correlation_id(request),
+                "details": exc.details,
+            }
+        },
+    )
 
 
 def register_exception_handlers(app: object) -> None:
@@ -26,17 +44,7 @@ def register_exception_handlers(app: object) -> None:
 
     @app.exception_handler(ApplicationError)
     async def handle_application_error(request: Request, exc: ApplicationError) -> JSONResponse:
-        return JSONResponse(
-            status_code=exc.status_code,
-            content={
-                "error": {
-                    "code": exc.code,
-                    "message": exc.message,
-                    "correlation_id": _correlation_id(request),
-                    "details": exc.details,
-                }
-            },
-        )
+        return application_error_response(request, exc)
 
     @app.exception_handler(RequestValidationError)
     async def handle_request_validation_error(
@@ -56,7 +64,8 @@ def register_exception_handlers(app: object) -> None:
 
     @app.exception_handler(Exception)
     async def handle_unexpected_error(request: Request, exc: Exception) -> JSONResponse:
-        logger.exception("Unhandled application error", exc_info=exc)
+        with log_context(**error_fields(exc)):
+            logger.error("Unhandled application error")
         return JSONResponse(
             status_code=500,
             content={

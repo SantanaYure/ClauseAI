@@ -19,4 +19,13 @@ export const appConfig = {
   /** Deve espelhar `MAX_UPLOAD_MB` do backend. */
   maxUploadBytes:
     positiveNumber(import.meta.env.VITE_MAX_UPLOAD_MB, DEFAULT_MAX_UPLOAD_MB) * 1024 * 1024,
+  /** Configuração pública do app web no Firebase (identidade anônima por navegador). */
+  firebase: {
+    apiKey: import.meta.env.VITE_FIREBASE_API_KEY ?? '',
+    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN ?? '',
+    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID ?? '',
+    appId: import.meta.env.VITE_FIREBASE_APP_ID ?? '',
+  },
+  /** Identidade local de desenvolvimento (backend com AUTH_BACKEND=fake). Nunca em produção. */
+  useDevIdentity: import.meta.env.DEV && import.meta.env.VITE_AUTH_MODE === 'dev',
 } as const;

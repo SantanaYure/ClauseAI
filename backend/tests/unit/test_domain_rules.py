@@ -1,5 +1,5 @@
 from app.application.use_cases.policies import detect_content_type
-from app.domain.entities import AssessmentDecision, ConceptAssessment, Policy
+from app.domain.entities import AssessmentDecision, ConceptAssessment, Policy, utc_now
 from app.domain.services.guardrails import enforce_contract_rule, sanitize_decision
 from app.domain.services.policy_aggregation import merge_occurrences
 from app.domain.services.scoring import (
@@ -26,7 +26,13 @@ KB = JsonConceptCatalog().load()
 
 def policy(policy_id: str, occurrences: list) -> Policy:  # type: ignore[type-arg]
     return Policy(
-        id=policy_id, insurer=policy_id, name=policy_id, occurrences=occurrences, correlation_id="c"
+        id=policy_id,
+        owner_id="owner",
+        expires_at=utc_now(),
+        insurer=policy_id,
+        name=policy_id,
+        occurrences=occurrences,
+        correlation_id="c",
     )
 
 

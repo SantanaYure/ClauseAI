@@ -116,6 +116,10 @@ class PolicyDocument(DomainModel):
 
 class Policy(DomainModel):
     id: str
+    # Anonymous identity that uploaded the policy; only this owner can see it.
+    owner_id: str = Field(min_length=1)
+    # Fixed retention deadline (upload + RETENTION_HOURS); never renewed.
+    expires_at: datetime
     insurer: str
     name: str
     number: str | None = None
@@ -128,6 +132,9 @@ class Policy(DomainModel):
     correlation_id: str
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
+
+    def is_expired(self, now: datetime) -> bool:
+        return self.expires_at <= now
 
 
 # ---------- Extraction ----------
@@ -237,6 +244,9 @@ class Failure(DomainModel):
 
 class Comparison(DomainModel):
     id: str
+    owner_id: str = Field(min_length=1)
+    # The earliest expiry of the two compared policies.
+    expires_at: datetime
     created_at: datetime = Field(default_factory=utc_now)
     completed_at: datetime | None = None
     status: ComparisonStatus = ComparisonStatus.REQUESTED
@@ -251,6 +261,9 @@ class Comparison(DomainModel):
     failure: Failure | None = None
     correlation_id: str
     models: dict[str, str] = Field(default_factory=dict)
+
+    def is_expired(self, now: datetime) -> bool:
+        return self.expires_at <= now
 
 
 class AssessmentDecision(DomainModel):

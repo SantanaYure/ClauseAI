@@ -6,7 +6,7 @@ import contextlib
 
 from app.domain.interfaces.events import Event, EventBus, EventHandler
 from app.infrastructure.events.in_memory import InMemoryEventBus
-from app.shared.logging import get_logger
+from app.shared.logging import error_fields, get_logger, log_context
 
 logger = get_logger(__name__)
 
@@ -52,7 +52,8 @@ class QueuedEventBus(EventBus):
             event = await self._queue.get()
             try:
                 await self._inner.publish(event)
-            except Exception:  # handlers record their own failures
-                logger.exception("Event processing failed")
+            except Exception as exc:  # handlers record their own failures
+                with log_context(**error_fields(exc)):
+                    logger.error("Event processing failed")
             finally:
                 self._queue.task_done()

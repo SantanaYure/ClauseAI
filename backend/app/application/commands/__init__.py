@@ -15,6 +15,7 @@ class UploadedFile:
 
 @dataclass(frozen=True, slots=True)
 class CreatePolicyCommand:
+    owner_id: str
     insurer: str | None
     name: str | None
     files: list[UploadedFile]
@@ -23,6 +24,7 @@ class CreatePolicyCommand:
 
 @dataclass(frozen=True, slots=True)
 class CreateComparisonCommand:
+    owner_id: str
     policy_a_id: str
     policy_b_id: str
     selected_profile: RiskProfile
