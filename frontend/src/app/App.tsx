@@ -9,6 +9,7 @@ import { HomePage } from '../features/home/HomePage';
 import { NewPolicyPage } from '../features/policies/NewPolicyPage';
 import { PoliciesPage } from '../features/policies/PoliciesPage';
 import { PolicyDetailPage } from '../features/policies/PolicyDetailPage';
+import { PrivacyPage } from '../features/privacy/PrivacyPage';
 import '../styles/app.scss';
 import { AppShell } from './AppShell';
 import { paths, sectionOf, useRoute, type Route } from './router';
@@ -33,6 +34,8 @@ function renderRoute(route: Route) {
       return <ConceptDetailPage conceptId={route.conceptId} />;
     case 'history':
       return <HistoryPage />;
+    case 'privacy':
+      return <PrivacyPage />;
     case 'not-found':
       return (
         <EmptyState

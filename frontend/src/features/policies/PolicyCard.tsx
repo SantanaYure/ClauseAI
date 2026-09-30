@@ -1,5 +1,6 @@
 import { paths } from '../../app/router';
 import { Badge } from '../../components/Badge';
+import { ExpiryNote } from '../../components/ExpiryNote';
 import { Icon } from '../../components/Icon';
 import { Spinner } from '../../components/Spinner';
 import { COMPARABLE_POLICY_STATUSES } from '../../services/api/clause-api';
@@ -75,6 +76,8 @@ export function PolicyCard({ policy, onDeleted }: PolicyCardProps) {
           {describeProcessing(policy.documents)}
         </p>
       )}
+
+      <ExpiryNote expiresAt={policy.expiresAt} format={(phrase) => `Expira ${phrase}`} />
 
       {policy.alerts.length > 0 && (
         <p className="inline-alert">

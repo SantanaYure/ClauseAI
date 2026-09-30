@@ -49,6 +49,12 @@ export function AppShell({ active, children }: AppShellProps) {
 
       <main id="conteudo" className="content" tabIndex={-1}>
         {children}
+        <footer className="app-footer">
+          <a href={paths.privacy}>
+            <Icon name="lock" size={16} />
+            Privacidade e dados
+          </a>
+        </footer>
       </main>
     </div>
   );

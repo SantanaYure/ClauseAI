@@ -108,6 +108,17 @@ describe('Resultado da comparação', () => {
   beforeEach(setupFetch);
   afterEach(() => vi.unstubAllGlobals());
 
+  it('avisa quando a comparação expira', async () => {
+    const expiresAt = new Date(Date.now() + 5.5 * 3_600_000).toISOString();
+    mockApi([
+      { match: '/api/v1/comparisons/cmp_1', body: comparison({ expires_at: expiresAt }) },
+      ...policyRoutes,
+    ]);
+    await openRoute('#/comparar/cmp_1');
+    expect(await screen.findByText('Esta comparação expira em 5 horas.')).toBeInTheDocument();
+    expect(screen.getByText('Consulte seu corretor de seguros.')).toBeInTheDocument();
+  });
+
   it('segue a ordem fixa: conclusão, placares, vantagens e atenção, Ver cálculo', async () => {
     mockApi([{ match: '/api/v1/comparisons/cmp_1', body: comparison() }, ...policyRoutes]);
     await openRoute('#/comparar/cmp_1');
