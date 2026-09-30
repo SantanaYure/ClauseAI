@@ -83,7 +83,7 @@ def test_upload_smoke_with_fakes(
     monkeypatch.setattr(fakes, "FakePdfReader", PypdfTextReader)
     path = next(p for p in generated if p.suffix == suffix)
     mime = PDF_MIME if suffix == ".pdf" else DOCX_MIME
-    with TestClient(fakes.build_test_app(tmp_path)) as client:
+    with TestClient(fakes.build_test_app(tmp_path), headers=fakes.auth_headers()) as client:
         response = client.post(
             "/api/v1/policies",
             data={"document_types": ["POLICY"], "insurer": "Seguradora Fictícia"},

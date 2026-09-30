@@ -33,6 +33,21 @@ class Settings(BaseSettings):
     storage_backend: Literal["local", "firebase"] = "local"
     local_storage_dir: str = ".data/uploads"
 
+    # Identity: "firebase" (anonymous Firebase Auth ID tokens) or "fake" (`Bearer dev-<uid>`,
+    # local development and tests only; refused in production).
+    auth_backend: Literal["firebase", "fake"] = "firebase"
+    # Tolerance for small clock differences when checking token timestamps.
+    auth_clock_skew_seconds: int = Field(default=10, ge=0, le=60)
+
+    # LGPD retention: every policy is deleted this many hours after upload (no renewal).
+    retention_hours: int = Field(default=24, ge=1, le=24 * 30)
+    retention_sweep_minutes: int = Field(default=15, ge=1, le=24 * 60)
+
+    # Per-owner quotas (HTTP 429 QUOTA_EXCEEDED). Rate windows live in process memory.
+    max_active_policies_per_owner: int = Field(default=20, ge=1, le=1000)
+    uploads_per_hour: int = Field(default=10, ge=1, le=1000)
+    comparisons_per_hour: int = Field(default=20, ge=1, le=1000)
+
     firebase_credentials_path: str | None = None
     firebase_project_id: str | None = None
     firebase_client_email: str | None = None
@@ -83,17 +98,27 @@ class Settings(BaseSettings):
     def restore_newlines(cls, value: str | None) -> str | None:
         return value.replace("\\n", "\n") if value else value
 
+    @property
+    def is_production(self) -> bool:
+        return self.app_env.lower() in ("production", "prod")
+
+    @property
+    def uses_firebase(self) -> bool:
+        return "firebase" in (self.persistence_backend, self.storage_backend, self.auth_backend)
+
     def missing_required(self) -> list[str]:
         """Names of the variables the configured runtime still needs."""
 
         missing: list[str] = []
         if self.ai_provider == "gemini" and not self.gemini_api_key:
             missing.append("GEMINI_API_KEY")
-        if self.ai_provider == "local" and self.app_env.lower() in ("production", "prod"):
+        if self.ai_provider == "local" and self.is_production:
             missing.append("AI_PROVIDER diferente de local (não permitido em produção)")
+        if self.auth_backend == "fake" and self.is_production:
+            missing.append("AUTH_BACKEND diferente de fake (não permitido em produção)")
         if self.storage_backend == "firebase" and not self.firebase_storage_bucket:
             missing.append("FIREBASE_STORAGE_BUCKET")
-        if "firebase" in (self.persistence_backend, self.storage_backend):
+        if self.uses_firebase:
             has_file = bool(self.firebase_credentials_path)
             has_fields = all(
                 (self.firebase_project_id, self.firebase_client_email, self.firebase_private_key)

@@ -43,3 +43,10 @@ class ValidationError(ApplicationError):
 
     default_code = "VALIDATION_ERROR"
     default_status_code = 422
+
+
+class AuthenticationError(ApplicationError):
+    """The caller did not prove its identity (missing, invalid, expired or revoked token)."""
+
+    default_code = "AUTH_REQUIRED"
+    default_status_code = 401

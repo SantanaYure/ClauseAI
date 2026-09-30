@@ -4,7 +4,7 @@ from pathlib import Path
 from app.domain.value_objects import ContractStatus
 from fastapi.testclient import TestClient
 
-from tests.fakes import PDF_BYTES, FakeExtractor, build_test_app, make_docx
+from tests.fakes import PDF_BYTES, FakeExtractor, auth_headers, build_test_app, make_docx
 
 
 def wait_for(client: TestClient, url: str, done: set[str], timeout: float = 10) -> dict:  # type: ignore[type-arg]
@@ -29,7 +29,7 @@ def upload(client: TestClient, types: list[str], insurer: str = "") -> str:
 
 def test_full_flow_from_upload_to_weighted_comparison(tmp_path: Path) -> None:
     app = build_test_app(tmp_path, FakeExtractor({"DO-040": ContractStatus.NOT_FOUND}))
-    with TestClient(app) as client:
+    with TestClient(app, headers=auth_headers()) as client:
         policy_a = upload(client, ["POLICY", "GENERAL_CONDITIONS"], insurer="Seguradora Aurora")
         policy_b = upload(client, ["GENERAL_CONDITIONS"])
 
@@ -80,14 +80,14 @@ def test_full_flow_from_upload_to_weighted_comparison(tmp_path: Path) -> None:
 
 
 def test_catalog_is_served(tmp_path: Path) -> None:
-    with TestClient(build_test_app(tmp_path)) as client:
+    with TestClient(build_test_app(tmp_path), headers=auth_headers()) as client:
         concepts = client.get("/api/v1/concepts").json()["items"]
         assert len(concepts) == 44
         assert client.get("/api/v1/concepts/DO-036").json()["weight"] == 10
 
 
 def test_validation_errors_use_the_error_envelope(tmp_path: Path) -> None:
-    with TestClient(build_test_app(tmp_path)) as client:
+    with TestClient(build_test_app(tmp_path), headers=auth_headers()) as client:
         unsupported = client.post(
             "/api/v1/policies",
             data={"document_types": ["POLICY"]},
@@ -113,7 +113,7 @@ def test_validation_errors_use_the_error_envelope(tmp_path: Path) -> None:
 
 
 def test_delete_policy_removes_record_and_files(tmp_path: Path) -> None:
-    with TestClient(build_test_app(tmp_path)) as client:
+    with TestClient(build_test_app(tmp_path), headers=auth_headers()) as client:
         policy_id = upload(client, ["POLICY", "GENERAL_CONDITIONS"])
         wait_for(client, f"/api/v1/policies/{policy_id}", {"READY", "ATTENTION", "FAILED"})
         assert list(tmp_path.rglob("*.pdf"))
@@ -131,7 +131,7 @@ def test_delete_policy_removes_record_and_files(tmp_path: Path) -> None:
 
 
 def test_comparisons_stay_in_history_after_policy_deletion(tmp_path: Path) -> None:
-    with TestClient(build_test_app(tmp_path)) as client:
+    with TestClient(build_test_app(tmp_path), headers=auth_headers()) as client:
         policy_a = upload(client, ["POLICY"])
         policy_b = upload(client, ["POLICY"])
         for policy_id in (policy_a, policy_b):
@@ -150,7 +150,7 @@ def test_comparisons_stay_in_history_after_policy_deletion(tmp_path: Path) -> No
 
 
 def test_cancel_policy_endpoint(tmp_path: Path) -> None:
-    with TestClient(build_test_app(tmp_path)) as client:
+    with TestClient(build_test_app(tmp_path), headers=auth_headers()) as client:
         policy_id = upload(client, ["POLICY"])
         # Wait until extraction finishes
         wait_for(client, f"/api/v1/policies/{policy_id}", {"READY", "ATTENTION", "FAILED"})
@@ -173,7 +173,7 @@ def _upload_docx(client: TestClient) -> str:
 
 def test_comparison_works_for_pdf_docx_and_mixed_policies(tmp_path: Path) -> None:
     app = build_test_app(tmp_path)
-    with TestClient(app) as client:
+    with TestClient(app, headers=auth_headers()) as client:
         pdf_a, pdf_b = upload(client, ["POLICY"]), upload(client, ["POLICY"])
         docx_a, docx_b = _upload_docx(client), _upload_docx(client)
         done = {"READY", "ATTENTION", "FAILED"}
@@ -199,7 +199,7 @@ def test_comparison_works_for_pdf_docx_and_mixed_policies(tmp_path: Path) -> Non
 
 def test_upload_rejects_xlsx_disguised_as_docx(tmp_path: Path) -> None:
     app = build_test_app(tmp_path)
-    with TestClient(app) as client:
+    with TestClient(app, headers=auth_headers()) as client:
         response = client.post(
             "/api/v1/policies",
             data={"document_types": ["POLICY"]},

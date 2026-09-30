@@ -1,6 +1,7 @@
 """Ports implemented by infrastructure adapters (docs/architecture/MODULE_STRUCTURE.md)."""
 
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from typing import Protocol
 
 from app.domain.entities import (
@@ -30,23 +31,79 @@ class BlobStorage(Protocol):
         """Remove the object; deleting a missing key is not an error."""
         ...
 
+    async def delete_prefix(self, prefix: str) -> None:
+        """Remove every object whose key starts with `prefix` (missing ones are ignored)."""
+        ...
+
 
 class PolicyRepository(Protocol):
     async def save(self, policy: Policy) -> None: ...
 
-    async def get(self, policy_id: str) -> Policy | None: ...
+    async def get(self, policy_id: str) -> Policy | None:
+        """Return None for unknown ids and for legacy records without an owner."""
+        ...
 
-    async def list_recent(self, limit: int) -> list[Policy]: ...
+    async def list_recent(self, owner_id: str, limit: int) -> list[Policy]:
+        """The owner's policies, newest first (expired ones included)."""
+        ...
 
     async def delete(self, policy_id: str) -> None: ...
+
+    async def delete_all_for_owner(self, owner_id: str) -> None: ...
+
+    async def list_expired(self, before: datetime, limit: int) -> list[Policy]: ...
 
 
 class ComparisonRepository(Protocol):
     async def save(self, comparison: Comparison) -> None: ...
 
-    async def get(self, comparison_id: str) -> Comparison | None: ...
+    async def get(self, comparison_id: str) -> Comparison | None:
+        """Return None for unknown ids and for legacy records without an owner."""
+        ...
 
-    async def list_recent(self, limit: int) -> list[Comparison]: ...
+    async def list_recent(self, owner_id: str, limit: int) -> list[Comparison]:
+        """The owner's comparisons, newest first (expired ones included)."""
+        ...
+
+    async def count_active(self, owner_id: str, now: datetime) -> int:
+        """How many of the owner's comparisons are not expired at `now`."""
+        ...
+
+    async def delete(self, comparison_id: str) -> None: ...
+
+    async def delete_all_for_owner(self, owner_id: str) -> None: ...
+
+    async def list_expired(self, before: datetime, limit: int) -> list[Comparison]: ...
+
+
+@dataclass(frozen=True, slots=True)
+class Identity:
+    """An authenticated caller. `uid` is the anonymous account id (the data owner)."""
+
+    uid: str
+
+
+class IdentityVerifier(Protocol):
+    async def verify(self, token: str, check_revoked: bool = False) -> Identity:
+        """Validate a bearer token.
+
+        Raise `AuthenticationError` (401) with AUTH_TOKEN_EXPIRED, AUTH_TOKEN_INVALID or
+        AUTH_TOKEN_REVOKED, or `InfrastructureError` AUTH_UNAVAILABLE (503) when the
+        identity provider cannot be reached.
+        """
+        ...
+
+
+class AccountRemover(Protocol):
+    async def remove(self, uid: str) -> None:
+        """Delete the anonymous account; a missing account is not an error."""
+        ...
+
+
+class RateLimiter(Protocol):
+    def allow(self, key: str, limit: int, window: timedelta) -> bool:
+        """Record one hit for `key` and tell whether it is within `limit` per `window`."""
+        ...
 
 
 class ConceptCatalog(Protocol):

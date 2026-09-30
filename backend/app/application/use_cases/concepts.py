@@ -1,9 +1,12 @@
-"""Concept catalog and evidence-only queries (SPEC-018)."""
+"""Concept catalog and evidence-only queries (SPEC-018).
+
+Occurrences and answers consider only the caller's own policies still within retention.
+"""
 
 from dataclasses import dataclass
 
 from app.application.errors import not_found
-from app.domain.entities import Concept, ConceptOccurrence, PolicyRef
+from app.domain.entities import Concept, ConceptOccurrence, Policy, PolicyRef, utc_now
 from app.domain.interfaces.ports import ConceptCatalog, PolicyRepository
 from app.domain.services.text import normalize_text, resolve_concept
 from app.domain.value_objects import (
@@ -52,17 +55,24 @@ class ConceptService:
             raise not_found("CONCEPT_NOT_FOUND", "Conceito não encontrado.")
         return concept
 
-    async def occurrences(self, concept_id: str, limit: int) -> list[OccurrenceMatch]:
+    async def _owned_policies(self, owner_id: str) -> list[Policy]:
+        now = utc_now()
+        policies = await self._policies.list_recent(owner_id, SCAN_LIMIT)
+        return [policy for policy in policies if not policy.is_expired(now)]
+
+    async def occurrences(
+        self, owner_id: str, concept_id: str, limit: int
+    ) -> list[OccurrenceMatch]:
         self.get_concept(concept_id)
         matches: list[OccurrenceMatch] = []
-        for policy in await self._policies.list_recent(SCAN_LIMIT):
+        for policy in await self._owned_policies(owner_id):
             for occurrence in policy.occurrences:
                 if occurrence.concept_id == concept_id:
                     ref = PolicyRef(id=policy.id, insurer=policy.insurer, name=policy.name)
                     matches.append(OccurrenceMatch(policy=ref, occurrence=occurrence))
         return matches[:limit]
 
-    async def ask(self, question: str) -> QueryAnswer:
+    async def ask(self, owner_id: str, question: str) -> QueryAnswer:
         """Answer only with stored evidence; otherwise state the limit of the base."""
 
         concept = resolve_concept(question, self._catalog.load().concepts)
@@ -80,7 +90,7 @@ class ConceptService:
 
         policies = [
             p
-            for p in await self._policies.list_recent(SCAN_LIMIT)
+            for p in await self._owned_policies(owner_id)
             if p.status in COMPARABLE_POLICY_STATUSES
         ]
         normalized = normalize_text(question)

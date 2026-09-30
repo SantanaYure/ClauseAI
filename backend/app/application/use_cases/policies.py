@@ -1,9 +1,14 @@
 """Policy use cases: upload, asynchronous processing and reading
-(SPEC-001 to SPEC-006, SPEC-015)."""
+(SPEC-001 to SPEC-006, SPEC-015).
+
+Every policy belongs to one anonymous owner. Reads, cancellation and deletion of a
+policy owned by someone else, or already expired, answer exactly like a missing one.
+"""
 
 import asyncio
 import contextlib
 from dataclasses import dataclass
+from datetime import timedelta
 from uuid import uuid4
 
 from app.application.commands import CreatePolicyCommand, UploadedFile
@@ -18,6 +23,8 @@ from app.application.file_types import (
     diagnose_office_problem,
     docx_expanded_size,
 )
+from app.application.quotas import QuotaGuard
+from app.application.storage_keys import document_key
 from app.domain.entities import (
     ConceptOccurrence,
     DocumentIntake,
@@ -53,10 +60,14 @@ from app.domain.value_objects import (
     PolicyStatus,
 )
 from app.shared.exceptions import ApplicationError, InfrastructureError
-from app.shared.logging import get_logger, log_context
+from app.shared.logging import error_fields, get_logger, log_context, owner_ref
 
 POLICY_UPLOADED = "PolicyUploaded"
 NOT_IDENTIFIED = "Não identificado"
+# Upper bound when reading one owner's policies (the quota is far below it).
+OWNER_SCAN_LIMIT = 200
+# How long erasing an owner's data waits for the cancelled jobs to stop.
+CANCEL_GRACE_SECONDS = 5.0
 
 logger = get_logger(__name__)
 
@@ -96,10 +107,24 @@ class UploadLimits:
     min_evidence_confidence: float
 
 
+@dataclass(frozen=True, slots=True)
+class _RunningJob:
+    owner_id: str
+    task: asyncio.Task[None]
+
+
+class _ProcessingAborted(Exception):
+    """The policy was cancelled or deleted while the worker was processing it."""
+
+
 def _initial_file_kind(content_type: str) -> FileKind:
     if content_type == PDF_MIME:
         return FileKind.SEARCHABLE_PDF
     return FileKind.DOCX if content_type == DOCX_MIME else FileKind.IMAGE
+
+
+def _policy_not_found() -> ApplicationError:
+    return not_found("POLICY_NOT_FOUND", "Apólice não encontrada.")
 
 
 class PolicyService:
@@ -113,6 +138,8 @@ class PolicyService:
         docx_reader: DocxTextReader,
         event_bus: EventBus,
         limits: UploadLimits,
+        quotas: QuotaGuard,
+        retention: timedelta,
     ) -> None:
         self._repository = repository
         self._storage = storage
@@ -122,7 +149,9 @@ class PolicyService:
         self._docx_reader = docx_reader
         self._event_bus = event_bus
         self._limits = limits
-        self._running_tasks: dict[str, asyncio.Task[None]] = {}
+        self._quotas = quotas
+        self._retention = retention
+        self._running_jobs: dict[str, _RunningJob] = {}
 
     # ---------- Commands ----------
 
@@ -179,7 +208,12 @@ class PolicyService:
             raise invalid(code, message.format(name=file.filename), status_code=422) from None
 
     async def create_policy(self, command: CreatePolicyCommand) -> Policy:
+        owner_id = command.owner_id
         content_types = await self._validate(command.files)
+        # Quotas are checked after validation, so a rejected file costs no upload slot.
+        self._quotas.ensure_room_for_policy(len(await self.list_policies(owner_id)))
+        self._quotas.consume_upload(owner_id)
+
         policy_id = f"pol_{uuid4().hex[:16]}"
         documents: list[PolicyDocument] = []
         for index, (file, content_type) in enumerate(
@@ -188,7 +222,7 @@ class PolicyService:
             document_id = f"{policy_id}_doc_{index + 1}"
             extension = FILE_EXTENSIONS[content_type]
             stored = await self._store(
-                f"policies/{policy_id}/{document_id}.{extension}",
+                document_key(owner_id, policy_id, document_id, extension),
                 file.data,
                 content_type,
                 already_stored=[d.storage_key for d in documents],
@@ -207,16 +241,25 @@ class PolicyService:
                     ocr_required=content_type not in (PDF_MIME, DOCX_MIME),
                 )
             )
+        created_at = utc_now()
         policy = Policy(
             id=policy_id,
+            owner_id=owner_id,
+            expires_at=created_at + self._retention,
             insurer=(command.insurer or "").strip() or NOT_IDENTIFIED,
             name=(command.name or "").strip() or NOT_IDENTIFIED,
             documents=documents,
             correlation_id=command.correlation_id,
+            created_at=created_at,
+            updated_at=created_at,
         )
         await self._repository.save(policy)
         await self._event_bus.publish(
-            Event.create(POLICY_UPLOADED, command.correlation_id, {"policy_id": policy_id})
+            Event.create(
+                POLICY_UPLOADED,
+                command.correlation_id,
+                {"policy_id": policy_id, "owner_id": owner_id},
+            )
         )
         return policy
 
@@ -231,110 +274,25 @@ class PolicyService:
             for stored_key in already_stored:
                 with contextlib.suppress(Exception):
                     await self._storage.delete(stored_key)
-            logger.exception("Storage failed during upload")
+            with log_context(**error_fields(exc)):
+                logger.error("Storage failed during upload")
             raise InfrastructureError(
                 "Não foi possível armazenar o arquivo. Tente novamente em instantes.",
                 code="STORAGE_UNAVAILABLE",
                 details={"retryable": True},
             ) from exc
 
-    # ---------- Worker ----------
-
-    async def handle_policy_uploaded(self, event: Event) -> None:
-        await self.process_policy(str(event.payload["policy_id"]))
-
-    async def process_policy(self, policy_id: str) -> None:
-        policy = await self._repository.get(policy_id)
-        if policy is None or policy.status != PolicyStatus.PROCESSING:
-            return  # idempotent: already processed
-
-        # Run in its own task: cancelling a policy must stop this job, not the
-        # queue worker that is executing the handler.
-        job = asyncio.create_task(self._process(policy))
-        self._running_tasks[policy_id] = job
-        try:
-            await job
-        except asyncio.CancelledError:
-            current = asyncio.current_task()
-            if current is not None and current.cancelling():
-                job.cancel()  # the worker itself is stopping (shutdown)
-                raise
-            logger.info("Policy processing cancelled via task cancellation")
-        finally:
-            self._running_tasks.pop(policy_id, None)
-
-    async def _process(self, policy: Policy) -> None:
-        policy_id = policy.id
-        try:
-            knowledge_base = self._catalog.load()
-            occurrences: list[ConceptOccurrence] = []
-            intakes: list[tuple[PolicyDocument, DocumentIntake]] = []
-
-            with log_context(policy_id=policy_id, correlation_id=policy.correlation_id):
-                for document in policy.documents:
-                    fresh = await self._repository.get(policy_id)
-                    if fresh is None or fresh.status == PolicyStatus.CANCELLED:
-                        logger.info("Policy processing aborted: policy cancelled")
-                        return
-
-                    try:
-                        found, intake = await self._process_document(
-                            policy, document, knowledge_base
-                        )
-                        occurrences.extend(found)
-                        intakes.append((document, intake))
-                    except ApplicationError as exc:
-                        self._fail(
-                            document,
-                            exc.message,
-                            exc.code,
-                            bool((exc.details or {}).get("retryable")),
-                        )
-                    except Exception:
-                        logger.exception("Document processing failed")
-                        self._fail(
-                            document,
-                            "Falha inesperada ao processar o documento.",
-                            "UNEXPECTED_ERROR",
-                            retryable=True,
-                        )
-                    await self._save(policy)
-
-                fresh = await self._repository.get(policy_id)
-                if fresh is None or fresh.status == PolicyStatus.CANCELLED:
-                    logger.info("Policy processing aborted before final save: policy cancelled")
-                    return
-
-                self._apply_intake(policy, intakes)
-                policy.occurrences = merge_occurrences(occurrences)
-                policy.knowledge_base_version = knowledge_base.version
-                status, alerts = derive_policy_status(
-                    policy, policy.documents, self._limits.min_evidence_confidence
-                )
-                policy.alerts = alerts + [
-                    f"{document.filename} parece ser do tipo {intake.document_type} "
-                    f"(informado: {document.type})."
-                    for document, intake in intakes
-                    if intake.document_type and intake.document_type not in ("OTHER", document.type)
-                ]
-                policy.status = status
-                await self._save(policy)
-                logger.info("Policy processed")
-        except asyncio.CancelledError:
-            logger.info("Policy processing cancelled")
-            raise
-
-    async def cancel_policy(self, policy_id: str) -> Policy:
-        policy = await self.get_policy(policy_id)
+    async def cancel_policy(self, owner_id: str, policy_id: str) -> Policy:
+        policy = await self.get_policy(owner_id, policy_id)
         if policy.status != PolicyStatus.PROCESSING:
             raise invalid(
                 "POLICY_NOT_PROCESSING",
                 "Apenas apólices em processamento podem ser canceladas.",
             )
 
-        task = self._running_tasks.get(policy_id)
-        if task is not None and not task.done():
-            task.cancel()
+        job = self._running_jobs.get(policy_id)
+        if job is not None and not job.task.done():
+            job.task.cancel()
 
         policy.status = PolicyStatus.CANCELLED
         for document in policy.documents:
@@ -350,15 +308,144 @@ class PolicyService:
         if cancel_alert not in policy.alerts:
             policy.alerts.append(cancel_alert)
         await self._save(policy)
-        with log_context(policy_id=policy_id, correlation_id=policy.correlation_id):
+        with log_context(
+            policy_id=policy_id,
+            correlation_id=policy.correlation_id,
+            owner_ref=owner_ref(owner_id),
+        ):
             logger.info("Policy extraction cancelled")
         return policy
+
+    async def cancel_processing_for(self, owner_id: str) -> None:
+        """Stop every extraction the owner has running (used before erasing their data)."""
+
+        tasks = [
+            job.task
+            for job in self._running_jobs.values()
+            if job.owner_id == owner_id and not job.task.done()
+        ]
+        for task in tasks:
+            task.cancel()
+        if tasks:
+            await asyncio.wait(tasks, timeout=CANCEL_GRACE_SECONDS)
+
+    async def delete_policy(self, owner_id: str, policy_id: str) -> None:
+        """Delete the policy, its evidence and its original files.
+
+        Comparisons already made stay in the history: they keep a copy of the
+        evidence they used. A policy still being processed cannot be deleted, or
+        the worker would save it again.
+        """
+
+        policy = await self.get_policy(owner_id, policy_id)
+        if policy.status == PolicyStatus.PROCESSING:
+            raise conflict(
+                "POLICY_PROCESSING",
+                "A apólice ainda está em processamento. Aguarde a conclusão para excluí-la.",
+            )
+        for document in policy.documents:
+            await self._storage.delete(document.storage_key)
+        await self._repository.delete(policy_id)
+        with log_context(
+            policy_id=policy_id,
+            correlation_id=policy.correlation_id,
+            owner_ref=owner_ref(owner_id),
+        ):
+            logger.info("Policy deleted")
+
+    # ---------- Worker ----------
+
+    async def handle_policy_uploaded(self, event: Event) -> None:
+        policy_id = str(event.payload["policy_id"])
+        owner_id = str(event.payload.get("owner_id") or "")
+        with log_context(policy_id=policy_id, owner_ref=owner_ref(owner_id)):
+            policy = await self._repository.get(policy_id)
+            if policy is None or policy.owner_id != owner_id:
+                logger.warning("PolicyUploaded discarded: policy missing or owner mismatch")
+                return
+            await self.process_policy(policy_id)
+
+    async def process_policy(self, policy_id: str) -> None:
+        policy = await self._repository.get(policy_id)
+        if policy is None or policy.status != PolicyStatus.PROCESSING:
+            return  # idempotent: already processed, cancelled or deleted
+
+        # Run in its own task: cancelling a policy must stop this job, not the
+        # queue worker that is executing the handler.
+        job = asyncio.create_task(self._process(policy))
+        self._running_jobs[policy_id] = _RunningJob(owner_id=policy.owner_id, task=job)
+        try:
+            await job
+        except asyncio.CancelledError:
+            current = asyncio.current_task()
+            if current is not None and current.cancelling():
+                job.cancel()  # the worker itself is stopping (shutdown)
+                raise
+            logger.info("Policy processing cancelled via task cancellation")
+        finally:
+            self._running_jobs.pop(policy_id, None)
+
+    async def _process(self, policy: Policy) -> None:
+        with log_context(
+            policy_id=policy.id,
+            correlation_id=policy.correlation_id,
+            owner_ref=owner_ref(policy.owner_id),
+        ):
+            try:
+                await self._extract_all(policy)
+            except _ProcessingAborted:
+                logger.info("Policy processing aborted: policy cancelled or deleted")
+            except asyncio.CancelledError:
+                logger.info("Policy processing cancelled")
+                raise
+
+    async def _extract_all(self, policy: Policy) -> None:
+        knowledge_base = self._catalog.load()
+        occurrences: list[ConceptOccurrence] = []
+        intakes: list[tuple[PolicyDocument, DocumentIntake]] = []
+        for document in policy.documents:
+            try:
+                found, intake = await self._process_document(policy, document, knowledge_base)
+                occurrences.extend(found)
+                intakes.append((document, intake))
+            except _ProcessingAborted:
+                raise
+            except ApplicationError as exc:
+                self._fail(
+                    document, exc.message, exc.code, bool((exc.details or {}).get("retryable"))
+                )
+            except Exception as exc:
+                with log_context(**error_fields(exc)):
+                    logger.error("Document processing failed")
+                self._fail(
+                    document,
+                    "Falha inesperada ao processar o documento.",
+                    "UNEXPECTED_ERROR",
+                    retryable=True,
+                )
+            await self._persist_progress(policy)
+
+        self._apply_intake(policy, intakes)
+        policy.occurrences = merge_occurrences(occurrences)
+        policy.knowledge_base_version = knowledge_base.version
+        status, alerts = derive_policy_status(
+            policy, policy.documents, self._limits.min_evidence_confidence
+        )
+        policy.alerts = alerts + [
+            f"{document.filename} parece ser do tipo {intake.document_type} "
+            f"(informado: {document.type})."
+            for document, intake in intakes
+            if intake.document_type and intake.document_type not in ("OTHER", document.type)
+        ]
+        policy.status = status
+        await self._persist_progress(policy)
+        logger.info("Policy processed")
 
     async def _process_document(
         self, policy: Policy, document: PolicyDocument, knowledge_base: KnowledgeBase
     ) -> tuple[list[ConceptOccurrence], DocumentIntake]:
         document.status = DocumentStatus.EXTRACTING
-        await self._save(policy)
+        await self._persist_progress(policy)
         data = await self._storage.get(document.storage_key)
 
         page_texts: dict[int, str] = {}
@@ -378,7 +465,7 @@ class PolicyService:
             DocumentContent(document=document, data=data, page_texts=page_texts), knowledge_base
         )
         document.status = DocumentStatus.VALIDATING
-        await self._save(policy)
+        await self._persist_progress(policy)
 
         threshold = self._limits.min_evidence_confidence
         checked: list[ConceptOccurrence] = []
@@ -437,37 +524,29 @@ class PolicyService:
             policy.number = policy.number or intake.policy_number
             policy.validity = policy.validity or intake.validity
 
+    async def _persist_progress(self, policy: Policy) -> None:
+        """Worker save: never recreate a policy that was deleted or cancelled meanwhile."""
+
+        current = await self._repository.get(policy.id)
+        if current is None or current.status == PolicyStatus.CANCELLED:
+            raise _ProcessingAborted
+        await self._save(policy)
+
     async def _save(self, policy: Policy) -> None:
         policy.updated_at = utc_now()
         await self._repository.save(policy)
 
     # ---------- Queries ----------
 
-    async def get_policy(self, policy_id: str) -> Policy:
+    async def get_policy(self, owner_id: str, policy_id: str) -> Policy:
         policy = await self._repository.get(policy_id)
-        if policy is None:
-            raise not_found("POLICY_NOT_FOUND", "Apólice não encontrada.")
+        if policy is None or policy.owner_id != owner_id or policy.is_expired(utc_now()):
+            raise _policy_not_found()
         return policy
 
-    async def delete_policy(self, policy_id: str) -> None:
-        """Delete the policy, its evidence and its original files.
+    async def list_policies(self, owner_id: str, limit: int = OWNER_SCAN_LIMIT) -> list[Policy]:
+        """The owner's policies that are still within the retention period."""
 
-        Comparisons already made stay in the history: they keep a copy of the
-        evidence they used. A policy still being processed cannot be deleted, or
-        the worker would save it again.
-        """
-
-        policy = await self.get_policy(policy_id)
-        if policy.status == PolicyStatus.PROCESSING:
-            raise conflict(
-                "POLICY_PROCESSING",
-                "A apólice ainda está em processamento. Aguarde a conclusão para excluí-la.",
-            )
-        for document in policy.documents:
-            await self._storage.delete(document.storage_key)
-        await self._repository.delete(policy_id)
-        with log_context(policy_id=policy_id, correlation_id=policy.correlation_id):
-            logger.info("Policy deleted")
-
-    async def list_policies(self, limit: int) -> list[Policy]:
-        return await self._repository.list_recent(limit)
+        now = utc_now()
+        policies = await self._repository.list_recent(owner_id, OWNER_SCAN_LIMIT)
+        return [policy for policy in policies if not policy.is_expired(now)][:limit]

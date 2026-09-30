@@ -14,7 +14,7 @@ from app.domain.value_objects import DocumentStatus, DocumentType, PolicyStatus
 from app.infrastructure.pdf import PypdfTextReader
 from fastapi.testclient import TestClient
 
-from tests.fakes import FakeExtractor, build_test_app, make_docx
+from tests.fakes import OWNER, FakeExtractor, auth_headers, build_test_app, make_docx
 
 DOCX_CT = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
@@ -32,7 +32,7 @@ def _post(client: TestClient, name: str, data: bytes, content_type: str):  # typ
 
 
 def test_docx_upload_is_accepted(tmp_path: Path) -> None:
-    with TestClient(build_test_app(tmp_path)) as client:
+    with TestClient(build_test_app(tmp_path), headers=auth_headers()) as client:
         response = _post(client, "apolice.docx", _docx_bytes(), DOCX_CT)
         assert response.status_code == 202, response.text
 
@@ -43,14 +43,14 @@ def test_encrypted_pdf_is_rejected_at_upload_with_clear_message(tmp_path: Path) 
     writer.encrypt("segredo")
     buffer = io.BytesIO()
     writer.write(buffer)
-    with TestClient(build_test_app(tmp_path)) as client:
+    with TestClient(build_test_app(tmp_path), headers=auth_headers()) as client:
         response = _post(client, "protegido.pdf", buffer.getvalue(), "application/pdf")
         assert response.status_code == 422, response.text
         assert "senha" in response.text.lower()
 
 
 def test_corrupt_pdf_is_rejected_at_upload_with_clear_message(tmp_path: Path) -> None:
-    with TestClient(build_test_app(tmp_path)) as client:
+    with TestClient(build_test_app(tmp_path), headers=auth_headers()) as client:
         response = _post(client, "quebrado.pdf", b"%PDF-1.4\nlixo sem estrutura", "application/pdf")
         assert response.status_code == 422, response.text
 
@@ -83,6 +83,7 @@ async def test_cancelling_a_policy_does_not_kill_the_queue_worker(tmp_path: Path
         service: PolicyService = services.policies
         first = await service.create_policy(
             CreatePolicyCommand(
+                owner_id=OWNER,
                 insurer=None,
                 name=None,
                 correlation_id="c1",
@@ -92,12 +93,13 @@ async def test_cancelling_a_policy_does_not_kill_the_queue_worker(tmp_path: Path
             )
         )
         await asyncio.wait_for(started.wait(), 5)
-        await service.cancel_policy(first.id)
+        await service.cancel_policy(OWNER, first.id)
         await asyncio.sleep(0.2)
 
         service._extractor = FakeExtractor()  # type: ignore[assignment]
         second = await service.create_policy(
             CreatePolicyCommand(
+                owner_id=OWNER,
                 insurer=None,
                 name=None,
                 correlation_id="c2",
@@ -107,7 +109,7 @@ async def test_cancelling_a_policy_does_not_kill_the_queue_worker(tmp_path: Path
             )
         )
         for _ in range(60):
-            current = await service.get_policy(second.id)
+            current = await service.get_policy(OWNER, second.id)
             if current.status != PolicyStatus.PROCESSING:
                 break
             await asyncio.sleep(0.05)

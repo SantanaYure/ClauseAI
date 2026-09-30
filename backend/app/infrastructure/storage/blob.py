@@ -2,11 +2,20 @@
 
 import asyncio
 import hashlib
+import shutil
 from pathlib import Path
 from typing import Any
 
 from app.domain.interfaces.ports import StoredObject
 from app.shared.exceptions import InfrastructureError
+
+
+def _folder_prefix(prefix: str) -> str:
+    """Prefix deletion works on whole folders only, so a typo never matches siblings."""
+
+    if not prefix.endswith("/") or prefix.strip("/") == "":
+        raise InfrastructureError("Prefixo de armazenamento inválido.", code="STORAGE_UNAVAILABLE")
+    return prefix
 
 
 def _stored(key: str, data: bytes) -> StoredObject:
@@ -45,6 +54,12 @@ class FirebaseBlobStorage:
         except NotFound:
             return
 
+    async def delete_prefix(self, prefix: str) -> None:
+        folder = _folder_prefix(prefix)
+        blobs = await asyncio.to_thread(lambda: list(self._bucket.list_blobs(prefix=folder)))
+        for blob in blobs:
+            await self.delete(blob.name)
+
 
 class LocalBlobStorage:
     """Local folder, used when PERSISTENCE_BACKEND=memory."""
@@ -71,3 +86,7 @@ class LocalBlobStorage:
 
     async def delete(self, key: str) -> None:
         await asyncio.to_thread(self._path(key).unlink, missing_ok=True)
+
+    async def delete_prefix(self, prefix: str) -> None:
+        folder = self._path(_folder_prefix(prefix).rstrip("/"))
+        await asyncio.to_thread(shutil.rmtree, folder, ignore_errors=True)

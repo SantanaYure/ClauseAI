@@ -1,4 +1,7 @@
-"""HTTP DTOs for the /api/v1 contracts (docs/architecture/PERSISTENCE_AND_API.md)."""
+"""HTTP DTOs for the /api/v1 contracts (docs/architecture/PERSISTENCE_AND_API.md).
+
+`owner_id` is never exposed; `expires_at` (UTC) tells when the item will be deleted.
+"""
 
 from datetime import datetime
 
@@ -6,11 +9,16 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.domain.entities import (
     Comparison,
+    ComparisonItem,
     Concept,
     ConceptOccurrence,
+    ExecutiveSummary,
+    Failure,
     Policy,
     PolicyDocument,
     PolicyRef,
+    ProfileResult,
+    QualityCheck,
 )
 from app.domain.value_objects import (
     ComparisonStatus,
@@ -72,6 +80,7 @@ class PolicySummaryResponse(Dto):
     status: PolicyStatus
     documents: list[PolicyDocumentResponse]
     alerts: list[str]
+    expires_at: datetime
 
     @classmethod
     def of(cls, policy: Policy) -> "PolicySummaryResponse":
@@ -82,6 +91,7 @@ class PolicySummaryResponse(Dto):
             number=policy.number,
             validity=policy.validity,
             status=policy.status,
+            expires_at=policy.expires_at,
             documents=[PolicyDocumentResponse.of(d) for d in policy.documents],
             alerts=policy.alerts,
         )
@@ -105,6 +115,7 @@ class PolicyCreatedResponse(Dto):
     policy_id: str
     status: PolicyStatus
     document_ids: list[str]
+    expires_at: datetime
     correlation_id: str
 
 
@@ -117,12 +128,39 @@ class ComparisonCreateRequest(Dto):
 class ComparisonCreatedResponse(Dto):
     comparison_id: str
     status: ComparisonStatus
+    expires_at: datetime
     correlation_id: str
+
+
+class ComparisonResponse(Dto):
+    """Full comparison result, without the owner."""
+
+    id: str
+    created_at: datetime
+    completed_at: datetime | None
+    expires_at: datetime
+    status: ComparisonStatus
+    knowledge_base_version: str
+    selected_profile: RiskProfile
+    policy_a: PolicyRef
+    policy_b: PolicyRef
+    items: list[ComparisonItem]
+    profiles: list[ProfileResult]
+    summary: ExecutiveSummary | None
+    quality_gate: list[QualityCheck]
+    failure: Failure | None
+    correlation_id: str
+    models: dict[str, str]
+
+    @classmethod
+    def of(cls, comparison: Comparison) -> "ComparisonResponse":
+        return cls.model_validate(comparison.model_dump(exclude={"owner_id"}))
 
 
 class ComparisonListItemResponse(Dto):
     id: str
     created_at: datetime
+    expires_at: datetime
     status: ComparisonStatus
     policy_a: PolicyRef
     policy_b: PolicyRef
@@ -139,6 +177,7 @@ class ComparisonListItemResponse(Dto):
         return cls(
             id=comparison.id,
             created_at=comparison.created_at,
+            expires_at=comparison.expires_at,
             status=comparison.status,
             policy_a=comparison.policy_a,
             policy_b=comparison.policy_b,
@@ -166,3 +205,11 @@ class QueryAnswerResponse(Dto):
     answer: str
     matches: list[OccurrenceMatchResponse]
     guidance: bool
+
+
+class OwnerDataSummaryResponse(Dto):
+    """What "delete all my data" will erase."""
+
+    policies: int
+    documents: int
+    comparisons: int

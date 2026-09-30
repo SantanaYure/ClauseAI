@@ -16,7 +16,15 @@ from app.infrastructure.word import PythonDocxTextReader
 from app.shared.exceptions import ApplicationError
 from docx import Document
 
-from tests.fakes import PDF_BYTES, FakePdfReader, RecordingExtractor, make_docx
+from tests.fakes import (
+    OWNER,
+    PDF_BYTES,
+    RETENTION,
+    FakePdfReader,
+    RecordingExtractor,
+    make_docx,
+    make_quotas,
+)
 
 
 def _zip(files: dict[str, str]) -> bytes:
@@ -54,11 +62,14 @@ def _service(tmp_path: Path, extractor: RecordingExtractor) -> PolicyService:
         docx_reader=PythonDocxTextReader(),
         event_bus=InMemoryEventBus(),
         limits=UploadLimits(max_file_bytes=1024 * 1024, max_files=5, min_evidence_confidence=0.7),
+        quotas=make_quotas(),
+        retention=RETENTION,
     )
 
 
 def _command(*files: tuple[str, bytes]) -> CreatePolicyCommand:
     return CreatePolicyCommand(
+        owner_id=OWNER,
         insurer=None,
         name=None,
         correlation_id="corr-1",
@@ -208,7 +219,7 @@ async def test_docx_text_follows_native_path_without_ocr(tmp_path: Path) -> None
 
     await service.process_policy(policy.id)
 
-    saved = await service.get_policy(policy.id)
+    saved = await service.get_policy(OWNER, policy.id)
     document = saved.documents[0]
     assert document.status == DocumentStatus.COMPLETED
     assert document.file_kind == FileKind.DOCX
@@ -227,7 +238,9 @@ async def test_pdf_keeps_working_and_mixed_policy_processes(tmp_path: Path) -> N
 
     await service.process_policy(policy.id)
 
-    kinds = {d.filename: d.file_kind for d in (await service.get_policy(policy.id)).documents}
+    kinds = {
+        d.filename: d.file_kind for d in (await service.get_policy(OWNER, policy.id)).documents
+    }
     assert kinds["apolice.pdf"] == FileKind.SCANNED_PDF  # FakePdfReader has no text layer
     assert kinds["condicoes.docx"] == FileKind.DOCX
 
@@ -240,6 +253,6 @@ async def test_docx_without_text_fails_the_document_with_clear_message(tmp_path:
 
     await service.process_policy(policy.id)
 
-    document = (await service.get_policy(policy.id)).documents[0]
+    document = (await service.get_policy(OWNER, policy.id)).documents[0]
     assert document.status == DocumentStatus.FAILED
     assert document.failure is not None and "não contém texto" in document.failure

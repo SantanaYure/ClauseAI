@@ -1,23 +1,29 @@
 """Composition root for the ClauseAI API (docs/architecture/MODULE_STRUCTURE.md, section 7)."""
 
+from datetime import timedelta
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI
 
+from app.application.quotas import QuotaGuard, QuotaLimits
 from app.application.use_cases import (
     COMPARISON_REQUESTED,
     POLICY_UPLOADED,
     ComparisonService,
     ConceptService,
+    OwnerDataService,
     PolicyService,
+    RetentionSweeper,
     UploadLimits,
 )
 from app.domain.interfaces.ports import (
+    AccountRemover,
     BlobStorage,
     ComparisonRepository,
     ConceptAssessor,
+    IdentityVerifier,
     PolicyExtractor,
     PolicyRepository,
     SummaryWriter,
@@ -31,13 +37,22 @@ from app.infrastructure.ai.local import (
     LocalPolicyExtractor,
     LocalSummaryWriter,
 )
+from app.infrastructure.auth import (
+    FakeAccountRemover,
+    FakeIdentityVerifier,
+    FirebaseAccountRemover,
+    FirebaseIdentityVerifier,
+)
 from app.infrastructure.events import QueuedEventBus
+from app.infrastructure.firebase import firebase_app
 from app.infrastructure.knowledge_base import JsonConceptCatalog
 from app.infrastructure.pdf import PypdfTextReader
 from app.infrastructure.persistence import (
     InMemoryComparisonRepository,
     InMemoryPolicyRepository,
 )
+from app.infrastructure.quotas import SlidingWindowRateLimiter
+from app.infrastructure.scheduling import PeriodicJob
 from app.infrastructure.storage import LocalBlobStorage
 from app.infrastructure.word import PythonDocxTextReader
 from app.presentation.api.app import create_app
@@ -47,32 +62,6 @@ from app.shared.config.settings import Settings, get_settings
 
 class ConfigurationError(RuntimeError):
     """Raised at startup when required environment variables are missing."""
-
-
-def _firebase_app(settings: Settings) -> Any:
-    import firebase_admin
-    from firebase_admin import credentials
-
-    if "clauseai" in firebase_admin._apps:  # already initialized in this process
-        return firebase_admin.get_app("clauseai")
-    if settings.firebase_credentials_path:
-        credential = credentials.Certificate(settings.firebase_credentials_path)
-    else:
-        credential = credentials.Certificate(
-            {
-                "type": "service_account",
-                "project_id": settings.firebase_project_id,
-                "client_email": settings.firebase_client_email,
-                "private_key": settings.firebase_private_key,
-                "token_uri": "https://oauth2.googleapis.com/token",
-            }
-        )
-    options = (
-        {"storageBucket": settings.firebase_storage_bucket}
-        if settings.firebase_storage_bucket
-        else None
-    )
-    return firebase_admin.initialize_app(credential, options, name="clauseai")
 
 
 def _repositories(
@@ -101,6 +90,15 @@ def _storage(settings: Settings, firebase: Any) -> BlobStorage:
     return FirebaseBlobStorage(storage.bucket(app=firebase))
 
 
+def _identity(settings: Settings, firebase: Any) -> tuple[IdentityVerifier, AccountRemover]:
+    if settings.auth_backend == "fake":
+        return FakeIdentityVerifier(), FakeAccountRemover()
+    return (
+        FirebaseIdentityVerifier(firebase, settings.auth_clock_skew_seconds),
+        FirebaseAccountRemover(firebase),
+    )
+
+
 def _ai_components(
     settings: Settings,
 ) -> tuple[PolicyExtractor, ConceptAssessor, SummaryWriter]:
@@ -120,6 +118,17 @@ def _ai_components(
     )
 
 
+def _quotas(settings: Settings) -> QuotaGuard:
+    return QuotaGuard(
+        SlidingWindowRateLimiter(),
+        QuotaLimits(
+            max_active_policies=settings.max_active_policies_per_owner,
+            uploads_per_hour=settings.uploads_per_hour,
+            comparisons_per_hour=settings.comparisons_per_hour,
+        ),
+    )
+
+
 def build_application(settings: Settings) -> FastAPI:
     missing = settings.missing_required()
     if missing:
@@ -127,14 +136,15 @@ def build_application(settings: Settings) -> FastAPI:
             "Configuração incompleta no backend/.env. Preencha: "
             + ", ".join(missing)
             + ". Para desenvolvimento sem serviços externos use AI_PROVIDER=local, "
-            "PERSISTENCE_BACKEND=memory e STORAGE_BACKEND=local."
+            "PERSISTENCE_BACKEND=memory, STORAGE_BACKEND=local e AUTH_BACKEND=fake."
         )
 
     event_bus = QueuedEventBus(workers=settings.worker_concurrency)
-    uses_firebase = "firebase" in (settings.persistence_backend, settings.storage_backend)
-    firebase = _firebase_app(settings) if uses_firebase else None
+    firebase = firebase_app(settings) if settings.uses_firebase else None
     policies, comparisons = _repositories(settings, firebase)
     storage = _storage(settings, firebase)
+    identity_verifier, account_remover = _identity(settings, firebase)
+    quotas = _quotas(settings)
 
     catalog = JsonConceptCatalog()
     extractor, assessor, summary_writer = _ai_components(settings)
@@ -151,6 +161,8 @@ def build_application(settings: Settings) -> FastAPI:
             max_files=settings.max_files_per_policy,
             min_evidence_confidence=settings.min_evidence_confidence,
         ),
+        quotas=quotas,
+        retention=timedelta(hours=settings.retention_hours),
     )
     comparison_service = ComparisonService(
         comparisons=comparisons,
@@ -165,6 +177,7 @@ def build_application(settings: Settings) -> FastAPI:
             min_completeness=Decimal(str(settings.min_completeness)),
             ocr_min_confidence=settings.min_evidence_confidence,
         ),
+        quotas=quotas,
     )
     event_bus.subscribe(POLICY_UPLOADED, policy_service.handle_policy_uploaded)
     event_bus.subscribe(COMPARISON_REQUESTED, comparison_service.handle_comparison_requested)
@@ -173,8 +186,26 @@ def build_application(settings: Settings) -> FastAPI:
         policies=policy_service,
         comparisons=comparison_service,
         concepts=ConceptService(catalog, policies),
+        owner_data=OwnerDataService(
+            policy_service=policy_service,
+            comparison_service=comparison_service,
+            policies=policies,
+            comparisons=comparisons,
+            storage=storage,
+            accounts=account_remover,
+        ),
     )
-    return create_app(settings=settings, event_bus=event_bus, services=services)
+    sweeper = RetentionSweeper(policies, comparisons, storage)
+    retention_job = PeriodicJob(
+        "retention-sweep", sweeper.sweep, settings.retention_sweep_minutes * 60
+    )
+    return create_app(
+        settings=settings,
+        event_bus=event_bus,
+        services=services,
+        identity_verifier=identity_verifier,
+        jobs=[retention_job],
+    )
 
 
 _application: FastAPI | None = None
