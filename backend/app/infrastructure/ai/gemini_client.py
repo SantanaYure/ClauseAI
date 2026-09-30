@@ -4,7 +4,7 @@ Used by every AI step of the pipeline (extraction, concept assessment and execut
 conclusion), all on Gemini 3.5 Flash Lite (ADR-006, ADR-023).
 """
 
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 import httpx
@@ -106,6 +106,23 @@ class GeminiClient:
         text: str | None = response.text
         return text
 
+    async def with_retries[T](
+        self, operation: Callable[[], Awaitable[T]], prompt_version: str
+    ) -> T:
+        """The single retry layer of every Gemini call (docs/AI_SYSTEM_SPEC.md, section 4).
+
+        `operation` may change its request between attempts (for example, asking only for
+        what is still missing), so a schema error is never repeated with the same input.
+        """
+
+        return await call_with_retries(
+            operation,
+            provider=PROVIDER,
+            model=self.model,
+            prompt_version=prompt_version,
+            max_attempts=self.max_attempts,
+        )
+
     async def generate[T](
         self, contents: list[Any], prompt_version: str, parse: Callable[[str | None], T]
     ) -> T:
@@ -114,15 +131,9 @@ class GeminiClient:
         async def run() -> T:
             return parse(await self._generate(contents))
 
-        return await call_with_retries(
-            run,
-            provider=PROVIDER,
-            model=self.model,
-            prompt_version=prompt_version,
-            max_attempts=self.max_attempts,
-        )
+        return await self.with_retries(run, prompt_version)
 
-    async def complete_json(self, prompt: str, prompt_version: str) -> dict[str, object]:
-        """A text prompt whose answer must be a JSON object."""
+    async def complete_json_once(self, prompt: str) -> dict[str, Any]:
+        """One call, no retries: for use inside an operation passed to `with_retries`."""
 
-        return await self.generate([prompt], prompt_version, parse_json_object)
+        return parse_json_object(await self._generate([prompt]))
