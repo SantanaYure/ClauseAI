@@ -40,6 +40,7 @@ O domínio não importa FastAPI, Firebase, Gemini, bibliotecas de UI ou detalhes
 - Integrações HTTP ficam em `src/services/api`.
 - Configuração vem de `import.meta.env` através de `src/config`.
 - Estilos globais ficam em `src/styles`; componentes devem evitar CSS inline sem necessidade.
+- Grid com filho de largura intrínseca (`select`, tabela, código) usa `minmax(0, 1fr)` nas colunas e `min-width: 0` no filho. `1fr` sozinho equivale a `minmax(auto, 1fr)` e deixa o conteúdo estourar a coluna. Exemplo: `.slots` usa `repeat(2, minmax(0, 1fr))` a partir de 640px, e o `select` do slot ocupa 100% e corta texto longo.
 
 ## Eventos
 

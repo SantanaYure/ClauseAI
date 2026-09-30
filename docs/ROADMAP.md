@@ -158,6 +158,21 @@ Limitações conhecidas de I-02 (SPEC-010):
 
 Definição de pronto: critérios de aceite das specs citadas passam, incluindo uma comparação PDF × DOCX ponta a ponta e a revisão de contraste da nova paleta.
 
+Correção de I-02: na página Comparar, os slots A e B estouravam a largura no tablet e no desktop. Corrigido com `minmax(0, 1fr)` e `min-width: 0` (regra em `development/conventions.md`). Validado pelo `qa`.
+
+### Pendências da auditoria de uso do Gemini
+
+| ID | Pendência | Onde | Estado |
+|---|---|---|---|
+| R1 | Tentativas aninhadas geravam até 9 chamadas iguais por lote. Agora há uma camada só (`GeminiClient.with_retries`), com teto de `AI_MAX_ATTEMPTS` (`AI_SYSTEM_SPEC.md` §4). Teste: `test_ai_call_budget.py` | backend | Resolvido |
+| R2 | Espera por cota (429) chega a 8 × 90 s por chamada, sem teto total por tarefa | backend | Aberto |
+| R3 | A trava do resumo só conferia percentuais. Agora `is_grounded_conclusion` confere todo número e o "vencedor único" em `CONDITIONED` (`AI_SYSTEM_SPEC.md` §8.3). Teste: `test_conclusion_guard.py`. Números por extenso não são verificados | backend | Resolvido |
+| R4 | Pedir `evidence_ids` e `sufficient_evidence` na avaliação e descartar evidência inexistente (`AI_SYSTEM_SPEC.md` §8.1) | backend | Aberto |
+| R5 | Faltam testes de `GeminiConceptAssessor`, `GeminiSummaryWriter`, `_page_windows`, `_merge_outputs` e do descarte de ID inventado | qa | Aberto |
+| R6 | Não há log de `usage_metadata` (tokens e custo) | backend | Aberto |
+| R8 | O enunciado `Desafios.pdf` não está no repositório | docs | Aberto |
+| D-01 | `format:check` falha no Windows: `core.autocrlf` gera CRLF, e o `.editorconfig` pede LF. Sugestão: `.gitattributes` com `* text=auto eol=lf` | devops | Aberto |
+
 ## Priorização de backlog futuro
 
 1. fila durável/executor externo se o volume exigir;
