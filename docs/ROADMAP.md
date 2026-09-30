@@ -47,7 +47,7 @@ Sequência recomendada para uma pessoa. Cada fase só avança quando sua defini�
 - **Entregável:** `POST /documents`, lista/detalhe, Storage e metadados Firestore.
 - **Definition of Done:** upload válido retorna `202`, original recuperável e limites/erros testados.
 - **Pode ser mockado:** Firebase Emulator ou fakes.
-- **Equipe de seguros:** política de retenção e dados sensíveis.
+- **Equipe de seguros:** dados sensíveis. Retenção definida: 24 horas após o envio (ADR-028).
 
 ## Fase 6 — Event Bus
 
@@ -146,6 +146,7 @@ Estados: `Documentado` (spec e ADR prontos), `Em andamento`, `Concluído`. Só m
 | ID | Incremento | Referências | Estado |
 |---|---|---|---|
 | I-01 | Suporte a DOCX: detecção por conteúdo, leitura local sem OCR, origem estável da evidência (bloco lógico), erros classificados, comparação PDF × DOCX | ADR-024; SPEC-001 a SPEC-004 | Implementado (backend: leitor, erros classificados, testes; frontend: rótulo "bloco" nas evidências; apólices de exemplo em PDF e DOCX em `Policy/`). Aguardando validação final do `qa`, incluindo a comparação PDF × DOCX ponta a ponta. Limitações conhecidas abaixo |
+| I-03 | Isolamento por navegador (Firebase Anonymous Auth), retenção de 24 h, exclusão de dados, cotas por dono, página Privacidade e dados, limpeza de dados legados | ADR-027, ADR-028; SPEC-020 | Documentado. Branch `feat/isolamento-anonimo-lgpd` |
 | I-02 | Remake visual e identidade de marca: fontes, cores, selos, navegação, envio com validação, processamento em 3 passos, slots A e B, resultado em ordem fixa | ADR-025; SPEC-007, SPEC-010, SPEC-019 | Implementado (fontes, cores, selos, menu, envio com validação por arquivo, 3 passos, tela de sucesso, slots A e B, resultado sem abas com "Ver cálculo" recolhido, "Tentar de novo"). Aguardando validação final do `qa`, incluindo a revisão de contraste |
 
 Limitações conhecidas de I-01 (evolução futura): o leitor de DOCX não extrai a numeração automática de listas e cláusulas do Word (`numbering.xml`), notas de rodapé nem caixas de texto. Evidências que dependam desses elementos podem perder o número da cláusula ou o texto. Detalhes na SPEC-004.
@@ -157,6 +158,15 @@ Limitações conhecidas de I-02 (SPEC-010):
 - As apólices de exemplo de `Policy/` são menores que apólices reais (cerca de 12 páginas). Servem para testar a comparação, não para medir desempenho em documentos longos.
 
 Definição de pronto: critérios de aceite das specs citadas passam, incluindo uma comparação PDF × DOCX ponta a ponta e a revisão de contraste da nova paleta.
+
+Riscos aceitos de I-03 (relatório do `qa`):
+
+| Risco | Mitigação futura |
+|---|---|
+| Cotas por `uid` são contornáveis criando novas contas anônimas | Firebase App Check ou limite por IP |
+| Após `DELETE /me/data`, o token antigo vale até 1 hora nas rotas que não checam revogação | Checar revogação em mais rotas ou encurtar a validade aceita |
+| Arquivos legados fora de `owners/` não são apagados pelo purge | Nenhuma no plano atual: o disco do Render é efêmero e os apaga no próximo deploy ou reinício |
+| TTL do Firestore desativado (exige plano Blaze). A retenção depende do `RetentionSweeper` e do keepalive de hora em hora; dado expirado pode ficar até cerca de 1 hora, sem aparecer nas leituras | Ativar Blaze e o TTL em `expires_at` como defesa em profundidade (backlog) |
 
 Correção de I-02: na página Comparar, os slots A e B estouravam a largura no tablet e no desktop. Corrigido com `minmax(0, 1fr)` e `min-width: 0` (regra em `development/conventions.md`). Validado pelo `qa`.
 
@@ -176,10 +186,11 @@ Correção de I-02: na página Comparar, os slots A e B estouravam a largura no 
 ## Priorização de backlog futuro
 
 1. fila durável/executor externo se o volume exigir;
-2. autenticação e autorização;
-3. revisão humana e correção assistida;
-4. múltiplas apólices/documento e versionamento;
-5. comparação de mais de duas apólices e edição de pesos pelo usuário com trilha de auditoria;
-6. exportação e auditoria avançada;
-7. circuit breaker, tracing distribuído e escala horizontal;
-8. DOCX: extrair numeração automática de listas e cláusulas (`numbering.xml`), notas de rodapé e caixas de texto.
+2. proteção da identidade anônima: Firebase App Check no frontend e na API, e Identity Platform para limitar a criação de contas anônimas, ou limite por IP; cotas em armazenamento compartilhado se houver mais de uma instância; cadastro opcional para recuperar dados em outro navegador;
+3. retenção em profundidade: ativar o plano Blaze e o TTL nativo do Firestore em `expires_at` de `policies`, `comparisons` e `concept_occurrences` (opcional; hoje a retenção depende do `RetentionSweeper` e do keepalive);
+4. revisão humana e correção assistida;
+5. múltiplas apólices/documento e versionamento;
+6. comparação de mais de duas apólices e edição de pesos pelo usuário com trilha de auditoria;
+7. exportação e auditoria avançada;
+8. circuit breaker, tracing distribuído e escala horizontal;
+9. DOCX: extrair numeração automática de listas e cláusulas (`numbering.xml`), notas de rodapé e caixas de texto.

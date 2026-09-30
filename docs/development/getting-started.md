@@ -34,15 +34,20 @@ Copy-Item .env.example .env
 npm run dev
 ```
 
-Abra `http://localhost:5173`. A tela fará uma chamada para `VITE_API_BASE_URL/health` e mostrará `Online` ou `Offline`.
+Abra `http://localhost:5173`. A tela fará uma chamada para `VITE_API_BASE_URL/health` e mostrará `Online` ou `Offline`. Antes de chamar a API, o frontend cria a identidade do navegador: anônima no Firebase ou, com `VITE_AUTH_MODE=dev`, local (veja Autenticação local, SPEC-020).
 
-Variáveis opcionais do frontend (`frontend/.env`):
+Variáveis do frontend (`frontend/.env`):
 
 | Variável | Padrão | Uso |
 |---|---|---|
 | `VITE_API_BASE_URL` | `http://localhost:8000` | Endereço do backend |
 | `VITE_UPLOAD_TIMEOUT_MS` | `300000` (5 min) | Tempo máximo do envio de arquivos |
 | `VITE_MAX_UPLOAD_MB` | `20` | Tamanho máximo por arquivo na validação local. Mantenha igual a `MAX_UPLOAD_MB` do backend |
+| `VITE_AUTH_MODE` | vazio | Só em `npm run dev`: `dev` dispensa o Firebase e envia `Bearer dev-<id>` (backend com `AUTH_BACKEND=fake`). Ignorada no build de produção |
+| `VITE_FIREBASE_API_KEY` | obrigatória sem modo `dev` | `apiKey` do app web do Firebase |
+| `VITE_FIREBASE_AUTH_DOMAIN` | obrigatória sem modo `dev` | Ex.: `claude-ai-a36cf.firebaseapp.com` |
+| `VITE_FIREBASE_PROJECT_ID` | obrigatória sem modo `dev` | `claude-ai-a36cf` |
+| `VITE_FIREBASE_APP_ID` | obrigatória sem modo `dev` | `appId` do app web do Firebase |
 
 ## Verificação local
 
@@ -97,6 +102,32 @@ Opções:
 
 Para mudar uma apólice, edite `catalog.py` e gere de novo. Os textos das cláusulas ficam em `texts.py` e `builder.py`.
 
+## Autenticação local
+
+Toda rota em `/api/v1` exige `Authorization: Bearer <token>` (SPEC-020). `AUTH_BACKEND` escolhe como o backend verifica o token:
+
+| Modo | `backend/.env` | Quando usar |
+|---|---|---|
+| Fake | `AUTH_BACKEND=fake` e `PERSISTENCE_BACKEND=memory` | Sem Firebase: interface com `VITE_AUTH_MODE=dev`, testes, `curl` e `/api/v1/docs`. O token é `dev-<uid>` (ex.: `Authorization: Bearer dev-ana`); cada `uid` é um dono diferente. Recusado com `APP_ENV=production` |
+| Firebase | `AUTH_BACKEND=firebase` e credenciais do Firebase | Interface com o Firebase real. O frontend obtém um ID token anônimo, e o backend o verifica com a conta de serviço |
+
+**Interface sem Firebase.** Com `VITE_AUTH_MODE=dev` em `frontend/.env` e o backend em `AUTH_BACKEND=fake`, o `npm run dev` gera um id aleatório por navegador, guarda no armazenamento local e envia `Bearer dev-<id>`. Não precisa das variáveis `VITE_FIREBASE_*`. O modo só existe em `npm run dev`; o build de produção sempre usa o Firebase.
+
+**Interface com Firebase.** Deixe `VITE_AUTH_MODE` vazia, preencha `VITE_FIREBASE_*` e use `AUTH_BACKEND=firebase`. Local e produção usam o mesmo projeto Firebase; o isolamento é por navegador, então os dados de teste local não aparecem para quem usa a produção.
+
+Outras variáveis do backend (`backend/.env`), com os padrões:
+
+| Variável | Padrão | Uso |
+|---|---|---|
+| `AUTH_CLOCK_SKEW_SECONDS` | `10` | Tolerância de relógio na verificação do token |
+| `RETENTION_HOURS` | `24` | Horas até cada apólice expirar |
+| `RETENTION_SWEEP_MINUTES` | `15` | Intervalo da varredura que apaga os expirados |
+| `MAX_ACTIVE_POLICIES_PER_OWNER` | `20` | Apólices ativas por navegador |
+| `UPLOADS_PER_HOUR` | `10` | Envios por hora por navegador |
+| `COMPARISONS_PER_HOUR` | `20` | Comparações por hora por navegador |
+
+Cota excedida responde `429 QUOTA_EXCEEDED` com `details.quota`.
+
 ## Rodar tudo localmente, sem credenciais
 
 Sem chave do Gemini e sem Firebase, edite `backend/.env` (copiado de `.env.example`) com:
@@ -105,9 +136,10 @@ Sem chave do Gemini e sem Firebase, edite `backend/.env` (copiado de `.env.examp
 PERSISTENCE_BACKEND=memory
 STORAGE_BACKEND=local
 AI_PROVIDER=local
+AUTH_BACKEND=fake
 ```
 
-Depois suba o backend e o frontend como acima. A IA local é determinística: só lê texto nativo (PDF com texto e DOCX) e cita trechos que contêm termos do catálogo. PDF escaneado e imagem não geram ocorrências. Os dados ficam em memória e somem ao reiniciar. O modo é recusado com `APP_ENV=production`. Detalhes no [`backend/README.md`](../../backend/README.md) e no ADR-026.
+E, em `frontend/.env`, `VITE_AUTH_MODE=dev`. Suba o backend e rode `npm run dev`: a interface funciona sem Firebase. Pela API, use `Authorization: Bearer dev-<uid>`. A IA local é determinística: só lê texto nativo (PDF com texto e DOCX) e cita trechos que contêm termos do catálogo. PDF escaneado e imagem não geram ocorrências. Os dados ficam em memória e somem ao reiniciar. O modo é recusado com `APP_ENV=production`. Detalhes no [`backend/README.md`](../../backend/README.md) e no ADR-026.
 
 ## Como a equipe trabalha
 

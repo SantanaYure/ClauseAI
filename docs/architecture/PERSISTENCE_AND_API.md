@@ -14,7 +14,18 @@ policies/{policy_id}/concept_occurrences/{concept_id} # ocorrências consolidada
 comparisons/{comparison_id}                           # itens, avaliações, scores, perfis, resumo e Quality Gate
 ```
 
-Os originais ficam em `policies/{policy_id}/{document_id}.{pdf|png|jpg|docx}`, sem URL pública: por padrão numa pasta local do backend (`STORAGE_BACKEND=local`, `backend/.data/uploads`) e, opcionalmente, no Firebase Storage (`STORAGE_BACKEND=firebase`, plano Blaze) — ver ADR-022. A base de conhecimento é um arquivo JSON versionado no código (`backend/app/infrastructure/knowledge_base/knowledge_base.json`), gerado pelo script Python `backend/scripts/build_knowledge_base.py` a partir de `docs/domain/`. As coleções abaixo continuam como alvo de evolução (histórico de jobs, resultado bruto da IA e `processed_events`).
+Os originais ficam em `owners/{uid}/policies/{policy_id}/{document_id}.{pdf|png|jpg|docx}`, sem URL pública. O prefixo `owners/{uid}/` permite apagar tudo de um dono com `BlobStorage.delete_prefix` (SPEC-020). O armazenamento fica por padrão numa pasta local do backend (`STORAGE_BACKEND=local`, `backend/.data/uploads`) e, opcionalmente, no Firebase Storage (`STORAGE_BACKEND=firebase`, plano Blaze); ver ADR-022. A base de conhecimento é um arquivo JSON versionado no código (`backend/app/infrastructure/knowledge_base/knowledge_base.json`), gerado pelo script Python `backend/scripts/build_knowledge_base.py` a partir de `docs/domain/`. As coleções abaixo continuam como alvo de evolução (histórico de jobs, resultado bruto da IA e `processed_events`).
+
+### Dono e expiração (SPEC-020)
+
+`policies`, `comparisons` e `concept_occurrences` gravam dois campos:
+
+| Campo | Conteúdo | Exposto na API |
+|---|---|---|
+| `owner_id` | `uid` do Firebase do dono | Nunca |
+| `expires_at` | Apólice: envio + `RETENTION_HOURS` (24 h). Comparação: menor `expires_at` das duas apólices. Ocorrência: o da apólice. Gravado como timestamp nativo do Firestore, para permitir ligar o TTL depois | Sim, em Policy e Comparison, inclusive nas respostas `202` de criação (ISO 8601 UTC) |
+
+Toda consulta filtra por `owner_id`. Documento sem `owner_id` ou sem `expires_at` nunca aparece. Toda leitura também filtra itens com `expires_at` vencido. O `RetentionSweeper` apaga os expirados no startup e a cada `RETENTION_SWEEP_MINUTES` (15). O TTL nativo do Firestore não está ativo: exige plano Blaze, e o projeto está sem faturamento (ADR-028). No Render gratuito, o workflow `retention-keepalive` chama `GET /health` de hora em hora para acordar o serviço e disparar a varredura; pior caso de permanência de dado expirado: cerca de 1 hora após o vencimento. Regras do Firestore em `firestore.rules` (deny-all: só o backend, com conta de serviço, acessa).
 
 ### Coleções (modelo de referência)
 
@@ -133,15 +144,45 @@ Chave por `event_id`, com `handler_name`, `processed_at`, `entity_id` e resultad
 - `policies`: `status` + `updated_at desc`; `insurer` + `updated_at desc`.
 - `concept_occurrences` (collection group): `concept_id` + `contract_status`.
 - `comparisons`: `created_at desc` e, futuramente, `policy_a_id`/`policy_b_id`.
+- Compostos em uso, versionados em `firestore.indexes.json` na raiz: `policies` (`owner_id` ASC, `created_at` DESC) e `comparisons` (`owner_id` ASC, `created_at` DESC). Atendem `where owner_id == uid order_by created_at desc`.
+- `fieldOverrides` fica vazio (`[]`). TTL do Firestore desativado (exige plano Blaze); ativá-lo em `expires_at` é melhoria opcional (ROADMAP).
+- Os índices são publicados com `firebase deploy --only firestore:indexes --project claude-ai-a36cf`, na raiz (usa `firebase.json`). Rode com a CLI logada numa conta com permissão: a conta de serviço do backend não cria índices.
 - Não indexar texto integral de cláusulas no MVP.
 
 Limitar listas, tamanho de payload e paginação. O cliente não deve buscar todos os documentos sem cursor.
 
 ## 3. API REST
 
-Base path: `/api/v1`. Todos os endpoints aceitam e respondem JSON, exceto o upload multipart. Respostas de criação assíncrona usam `202 Accepted`. Documentação interativa em `/api/v1/docs`.
+Base path: `/api/v1`. Todos os endpoints aceitam e respondem JSON, exceto o upload multipart. Respostas de criação assíncrona usam `202 Accepted`. Documentação interativa em `/api/v1/docs`, desligada em produção (assim como `/redoc` e `/openapi.json`).
 
-Implementados: `POST/GET /policies`, `GET/DELETE /policies/{id}`, `POST/GET /comparisons`, `GET /comparisons/{id}`, `GET /concepts`, `GET /concepts/{id}`, `GET /concepts/{id}/occurrences` e `POST /queries`. Os endpoints `/documents` abaixo continuam planejados: no MVP, os documentos são enviados e consultados pela apólice.
+Implementados: `POST/GET /policies`, `GET/DELETE /policies/{id}`, `POST/GET /comparisons`, `GET /comparisons/{id}`, `GET /concepts`, `GET /concepts/{id}`, `GET /concepts/{id}/occurrences`, `POST /queries`, `GET /me/data/summary` e `DELETE /me/data`.
+
+### Autenticação e dono
+
+Toda rota em `/api/v1` exige `Authorization: Bearer <Firebase ID token>`. Sem esse cabeçalho, a requisição é recusada com `401` antes de o corpo ser lido. `/health` é público. O `uid` do token é o dono de tudo o que ele cria, e cada rota só enxerga dados desse dono (SPEC-020).
+
+| Situação | Resposta |
+|---|---|
+| Sem cabeçalho ou malformado (antes de ler o corpo) | `401 AUTH_REQUIRED` |
+| Corpo acima de `max_files` × `MAX_UPLOAD_MB` + margem | `413 FILE_TOO_LARGE` (margem de 1 MiB para o multipart) |
+| Token expirado | `401 AUTH_TOKEN_EXPIRED` |
+| Token inválido | `401 AUTH_TOKEN_INVALID` |
+| Token revogado | `401 AUTH_TOKEN_REVOKED` |
+| Falha ao buscar certificados do Firebase | `503 AUTH_UNAVAILABLE`, `details.retryable = true` |
+| Recurso de outro dono ou inexistente | `404` idêntico (nunca `403`) |
+| Cota por dono excedida | `429 QUOTA_EXCEEDED`, `details.quota` indica qual |
+
+Os `401` levam o header `WWW-Authenticate: Bearer` e não trazem detalhes do Firebase. Policy e Comparison trazem `expires_at`; `owner_id` nunca aparece nas respostas.
+
+Cotas por dono, configuráveis no backend:
+
+| `details.quota` | Variável | Padrão | Onde é checada |
+|---|---|---|---|
+| `active_policies` | `MAX_ACTIVE_POLICIES_PER_OWNER` | 20 | `POST /policies` |
+| `uploads_per_hour` | `UPLOADS_PER_HOUR` | 10 | `POST /policies` |
+| `comparisons_per_hour` | `COMPARISONS_PER_HOUR` | 20 | `POST /comparisons` |
+
+Os endpoints `/documents` abaixo continuam planejados: no MVP, os documentos são enviados e consultados pela apólice.
 
 ### POST `/policies`
 
@@ -149,9 +190,9 @@ Implementados: `POST/GET /policies`, `GET/DELETE /policies/{id}`, `POST/GET /com
 
 **Request:** `multipart/form-data` com `insurer?`, `name?` e um ou mais campos `files[]`, cada um acompanhado de `document_types[]` (`POLICY`, `SPECIFICATION`, `GENERAL_CONDITIONS`, `ENDORSEMENT`…). Cada arquivo (PDF, JPG, PNG ou DOCX) passa pelas mesmas validações de `POST /documents` e gera um `Document` ligado à apólice.
 
-**Response `202`:** `policy_id`, `status: PROCESSING`, `document_ids[]`, `correlation_id`.
+**Response `202`:** `policy_id`, `status: PROCESSING`, `document_ids[]`, `expires_at`, `correlation_id`.
 
-**Erros:** os de `POST /documents`, mais `422 INVALID_DOCUMENT_TYPE`. O envio é tudo ou nada: um arquivo inválido recusa o lote inteiro e a mensagem cita o nome do arquivo. Qualquer falha de storage responde `503 STORAGE_UNAVAILABLE` (`details.retryable = true`), apaga os originais já gravados e não cria a apólice.
+**Erros:** os de `POST /documents`, mais `422 INVALID_DOCUMENT_TYPE` e `429 QUOTA_EXCEEDED` (`active_policies` ou `uploads_per_hour`). O envio é tudo ou nada: um arquivo inválido recusa o lote inteiro e a mensagem cita o nome do arquivo. Qualquer falha de storage responde `503 STORAGE_UNAVAILABLE` (`details.retryable = true`), apaga os originais já gravados e não cria a apólice.
 
 ### POST `/documents`
 
@@ -243,6 +284,18 @@ Estados públicos: `UPLOADED`, `PROCESSING`, `EXTRACTING`, `VALIDATING`, `COMPLE
 
 **Responses:** `200`; `404 POLICY_NOT_FOUND`; `409 POLICY_NOT_READY`.
 
+### GET `/me/data/summary`
+
+**Objetivo:** contar os dados do dono para o modal de exclusão.
+
+**Response `200`:** `{"policies": 2, "documents": 3, "comparisons": 1}`.
+
+### DELETE `/me/data`
+
+**Objetivo:** apagar todos os dados do dono. Idempotente; verifica revogação do token. Cancela processamentos em andamento e apaga comparações, apólices, ocorrências, arquivos (`owners/{uid}/...`) e a conta anônima no Firebase.
+
+**Responses:** `204` sem corpo, também na repetição; `401` conforme a tabela de autenticação.
+
 ### POST `/comparisons`
 
 **Objetivo:** criar comparação assíncrona de exatamente duas apólices.
@@ -258,10 +311,10 @@ Estados públicos: `UPLOADED`, `PROCESSING`, `EXTRACTING`, `VALIDATING`, `COMPLE
 **Response `202`:**
 
 ```json
-{"comparison_id":"cmp_01","status":"REQUESTED","correlation_id":"cor_02"}
+{"comparison_id":"cmp_01","status":"REQUESTED","expires_at":"2026-09-21T12:00:00Z","correlation_id":"cor_02"}
 ```
 
-**Erros:** `400 SAME_POLICY`, `404 POLICY_NOT_FOUND`, `409 POLICY_NOT_READY`, `422 INVALID_POLICY_COUNT`, `503 EVENT_BUS_UNAVAILABLE`.
+**Erros:** `400 SAME_POLICY`, `404 POLICY_NOT_FOUND` (inclui apólice de outro dono), `409 POLICY_NOT_READY`, `422 INVALID_POLICY_COUNT`, `429 QUOTA_EXCEEDED` (`comparisons_per_hour`), `503 EVENT_BUS_UNAVAILABLE`.
 
 ### GET `/comparisons`
 
@@ -274,6 +327,8 @@ Estados públicos: `UPLOADED`, `PROCESSING`, `EXTRACTING`, `VALIDATING`, `COMPLE
 ### GET `/comparisons/{comparison_id}`
 
 **Objetivo:** consultar status e resultado parcial/final.
+
+A resposta usa DTO próprio (`ComparisonResponse`), montado a partir da entidade sem `owner_id`, e inclui `expires_at`. O exemplo abaixo é o modelo de referência; os campos exatos estão no OpenAPI (`/api/v1/docs`).
 
 **Query:** `profile?` (`BASE`, `FINANCIAL`, `INTERNATIONAL`, `REGULATORY`, `TAIL`, `LABOR_REPUTATIONAL`), `importance?`.
 
@@ -337,10 +392,19 @@ Mensagens públicas não devem expor prompt, credencial, stack trace, resposta i
 - `202` para upload/comparação aceitos para processamento.
 - `200` para consultas.
 - `400/415/422` para entrada inválida.
-- `404` para entidade inexistente.
+- `401` para token ausente, malformado, expirado, inválido ou revogado.
+- `404` para entidade inexistente ou de outro dono.
 - `409` para estado incompatível.
 - `413` para arquivo grande.
-- `429` se houver limitação do provider/API.
+- `429 QUOTA_EXCEEDED` para cota por dono excedida (`details.quota`).
+- `503 AUTH_UNAVAILABLE` quando não dá para verificar o token (`details.retryable = true`).
 - `500` apenas para erro inesperado, com log correlacionado.
 
 O endpoint de upload não espera IA. Requisições repetidas com uma chave de idempotência futura devem retornar o mesmo recurso; no MVP, `checksum_sha256` pode ser usado apenas para detectar duplicata, sem rejeitar automaticamente até validação de produto.
+
+## 6. Segurança HTTP
+
+- CORS com origens explícitas (`CORS_ALLOWED_ORIGINS`), `allow_credentials=False`, `allow_headers` = `Authorization`, `Content-Type`, `X-Correlation-ID`, e `expose_headers` = `X-Correlation-ID`.
+- Headers em toda resposta: `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `X-Frame-Options: DENY`. Em produção, também `Strict-Transport-Security`. Em `/api`, `Cache-Control: no-store`.
+- `X-Correlation-ID` recebido fora de `[A-Za-z0-9-]{1,64}` é descartado e um novo é gerado.
+- Logs não trazem token, nome de arquivo, seguradora, texto extraído nem mensagem crua de exceção; o dono aparece como `owner_ref` (SPEC-020).
