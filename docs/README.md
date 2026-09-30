@@ -16,6 +16,7 @@ O sistema é um monólito modular com React/TypeScript/SCSS no frontend, Python/
 4. Para cada incremento, seguir a spec correspondente em [`specs/SDD_SPECIFICATIONS.md`](specs/SDD_SPECIFICATIONS.md).
 5. Registrar qualquer mudança estrutural em [`adrs/ADRS.md`](adrs/ADRS.md).
 6. Seguir o fluxo Git/CI em [`development/git-workflow.md`](development/git-workflow.md).
+7. Publicar conforme [`development/deploy.md`](development/deploy.md) (backend no Render, frontend na Vercel).
 
 ## Regras de precedência
 

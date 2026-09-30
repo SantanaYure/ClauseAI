@@ -1,0 +1,42 @@
+# Render Blueprint do backend ClauseAI (docs/development/deploy.md).
+# Segredos (sync: false) e o Secret File clauseai-firebase.json são preenchidos no painel do Render.
+services:
+  - type: web
+    name: clauseai-api
+    runtime: python
+    plan: free
+    region: virginia
+    branch: main
+    rootDir: backend
+    buildCommand: pip install .
+    # Um único processo: a fila de eventos roda em memória (QueuedEventBus).
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    # Só publica depois que o CI do commit passar.
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      - key: APP_ENV
+        value: production
+      - key: LOG_LEVEL
+        value: INFO
+      - key: PERSISTENCE_BACKEND
+        value: firebase
+      - key: STORAGE_BACKEND
+        value: local
+      - key: FIREBASE_CREDENTIALS_PATH
+        value: /etc/secrets/clauseai-firebase.json
+      - key: AI_PROVIDER
+        value: gemini
+      - key: GEMINI_MODEL
+        value: gemini-3.5-flash-lite
+      - key: MAX_UPLOAD_MB
+        value: "20"
+      - key: WORKER_CONCURRENCY
+        value: "2"
+      - key: GEMINI_API_KEY
+        sync: false
+      # URL de produção da Vercel, sem barra final. Várias origens: separe por vírgula.
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
