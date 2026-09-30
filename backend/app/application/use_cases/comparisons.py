@@ -31,6 +31,7 @@ from app.domain.services.scoring import (
     build_quality_gate,
     build_summary,
     format_percent,
+    unassessed_assessment,
 )
 from app.domain.value_objects import (
     COMPARABLE_POLICY_STATUSES,
@@ -69,6 +70,14 @@ def _side_payload(occurrence: ConceptOccurrence | None) -> dict[str, object]:
 
 def _ref(policy: Policy) -> PolicyRef:
     return PolicyRef(id=policy.id, insurer=policy.insurer, name=policy.name)
+
+
+def _failure(exc: ApplicationError, prefix: str) -> Failure:
+    return Failure(
+        code=exc.code,
+        message=prefix + exc.message,
+        retryable=bool((exc.details or {}).get("retryable")),
+    )
 
 
 class ComparisonService:
@@ -130,7 +139,9 @@ class ComparisonService:
             try:
                 await self._run(comparison)
             except ApplicationError as exc:
-                await self._finish_failed(comparison, exc.code, exc.message)
+                await self._finish_failed(
+                    comparison, exc.code, exc.message, bool((exc.details or {}).get("retryable"))
+                )
             except Exception:
                 logger.exception("Comparison failed")
                 await self._finish_failed(
@@ -149,10 +160,23 @@ class ComparisonService:
 
         await self._advance(comparison, ComparisonStatus.ASSESSING)
         requests = [self._request(pair) for pair in pairs if pair.needs_assessment]
-        assessments = await self._assessor.assess(requests) if requests else []
+        degraded: Failure | None = None
+        try:
+            assessments = await self._assessor.assess(requests) if requests else []
+            by_concept = {a.concept_id: a for a in assessments}
+        except ApplicationError as exc:
+            # Nothing is invented: concepts that needed AI keep no points and low
+            # confidence, so the deterministic data still yields a partial result.
+            logger.warning("Concept assessment unavailable; degrading to partial")
+            by_concept = {
+                pair.concept.id: unassessed_assessment(pair)
+                for pair in pairs
+                if pair.needs_assessment
+            }
+            degraded = _failure(exc, prefix="Avaliação por IA indisponível: ")
         comparison.models["assessment"] = self._assessor.model_name
 
-        items = build_items(pairs, {a.concept_id: a for a in assessments}, self._parameters)
+        items = build_items(pairs, by_concept, self._parameters)
         profiles = build_profiles(items, self._parameters)
         comparison.items = items
         comparison.profiles = profiles
@@ -161,7 +185,8 @@ class ComparisonService:
         base = next(p for p in profiles if p.profile == RiskProfile.BASE)
         summary = build_summary(items, base, self._parameters)
         await self._advance(comparison, ComparisonStatus.SUMMARIZING)
-        final_status = ComparisonStatus.COMPLETED
+        final_status = ComparisonStatus.PARTIAL if degraded else ComparisonStatus.COMPLETED
+        comparison.failure = degraded
         try:
             summary.conclusion = await self._summary_writer.write_conclusion(
                 summary, self._facts(summary, base.a.adherence, base.b.adherence)
@@ -169,9 +194,7 @@ class ComparisonService:
         except ApplicationError as exc:
             # The deterministic summary stays; the comparison is marked partial (SPEC-009).
             final_status = ComparisonStatus.PARTIAL
-            comparison.failure = Failure(
-                code=exc.code, message="Resumo redigido sem IA: " + exc.message
-            )
+            comparison.failure = degraded or _failure(exc, prefix="Resumo redigido sem IA: ")
         comparison.summary = summary
         comparison.quality_gate = build_quality_gate(
             policy_a, policy_b, items, summary, knowledge_base, self._parameters
@@ -211,8 +234,10 @@ class ComparisonService:
         comparison.status = status
         await self._comparisons.save(comparison)
 
-    async def _finish_failed(self, comparison: Comparison, code: str, message: str) -> None:
-        comparison.failure = Failure(code=code, message=message)
+    async def _finish_failed(
+        self, comparison: Comparison, code: str, message: str, retryable: bool = False
+    ) -> None:
+        comparison.failure = Failure(code=code, message=message, retryable=retryable)
         comparison.completed_at = utc_now()
         await self._advance(comparison, ComparisonStatus.FAILED)
 

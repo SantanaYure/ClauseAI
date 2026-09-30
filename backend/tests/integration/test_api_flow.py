@@ -4,7 +4,7 @@ from pathlib import Path
 from app.domain.value_objects import ContractStatus
 from fastapi.testclient import TestClient
 
-from tests.fakes import PDF_BYTES, FakeExtractor, build_test_app
+from tests.fakes import PDF_BYTES, FakeExtractor, build_test_app, make_docx
 
 
 def wait_for(client: TestClient, url: str, done: set[str], timeout: float = 10) -> dict:  # type: ignore[type-arg]
@@ -160,3 +160,52 @@ def test_cancel_policy_endpoint(tmp_path: Path) -> None:
         assert response.status_code == 400
         assert response.json()["error"]["code"] == "POLICY_NOT_PROCESSING"
 
+
+def _upload_docx(client: TestClient) -> str:
+    response = client.post(
+        "/api/v1/policies",
+        data={"document_types": ["POLICY"]},
+        files=[("files", ("apolice.docx", make_docx(), "application/octet-stream"))],
+    )
+    assert response.status_code == 202, response.text
+    return str(response.json()["policy_id"])
+
+
+def test_comparison_works_for_pdf_docx_and_mixed_policies(tmp_path: Path) -> None:
+    app = build_test_app(tmp_path)
+    with TestClient(app) as client:
+        pdf_a, pdf_b = upload(client, ["POLICY"]), upload(client, ["POLICY"])
+        docx_a, docx_b = _upload_docx(client), _upload_docx(client)
+        done = {"READY", "ATTENTION", "FAILED"}
+        for policy_id in (pdf_a, pdf_b, docx_a, docx_b):
+            wait_for(client, f"/api/v1/policies/{policy_id}", done)
+        detail = client.get(f"/api/v1/policies/{docx_a}").json()
+        assert detail["documents"][0]["file_kind"] == "DOCX"
+        assert detail["documents"][0]["status"] == "COMPLETED"
+
+        for first, second in ((pdf_a, pdf_b), (docx_a, docx_b), (pdf_a, docx_a)):
+            created = client.post(
+                "/api/v1/comparisons",
+                json={"policy_a_id": first, "policy_b_id": second, "selected_profile": "FINANCIAL"},
+            )
+            assert created.status_code == 202, created.text
+            result = wait_for(
+                client,
+                f"/api/v1/comparisons/{created.json()['comparison_id']}",
+                {"COMPLETED", "PARTIAL", "FAILED"},
+            )
+            assert result["status"] in {"COMPLETED", "PARTIAL"}
+
+
+def test_upload_rejects_xlsx_disguised_as_docx(tmp_path: Path) -> None:
+    app = build_test_app(tmp_path)
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/v1/policies",
+            data={"document_types": ["POLICY"]},
+            files=[
+                ("files", ("planilha.docx", b"PK\x03\x04 planilha", "application/vnd.ms-excel"))
+            ],
+        )
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "DOCX_CORRUPTED"

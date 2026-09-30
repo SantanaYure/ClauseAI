@@ -47,7 +47,7 @@ Providers concretos implementam uma interface pequena (`complete_structured`, `c
 flowchart LR
     D[Documento armazenado] --> I[Classificação P-INTAKE-001]
     I --> P{Tem camada de texto?}
-    P -- sim --> NT[Leitura nativa do PDF]
+    P -- sim --> NT[Leitura nativa do PDF ou DOCX]
     P -- não/parcial --> G[Gemini multimodal / OCR]
     NT --> G
     G --> R[Resposta recebida]
@@ -60,7 +60,11 @@ flowchart LR
     NM --> PS[PolicyStructured + ConceptOccurrence]
 ```
 
-A leitura nativa (biblioteca de PDF na infraestrutura) é usada quando há camada de texto; o texto nativo acompanha as páginas enviadas ao Gemini para reduzir erro de OCR. PDFs digitalizados e imagens usam somente a leitura multimodal. Cada evidência registra `extraction_method` e `confidence`; confiança abaixo do limiar configurado marca `low_confidence=true` e dispara `BROKER_GUIDANCE`. Um adaptador de OCR dedicado (por exemplo, Tesseract) pode ser acrescentado atrás da mesma porta se os golden datasets mostrarem necessidade.
+A leitura nativa (biblioteca de PDF na infraestrutura) é usada quando há camada de texto; o texto nativo acompanha as páginas enviadas ao Gemini para reduzir erro de OCR. PDFs digitalizados e imagens usam somente a leitura multimodal. DOCX é lido localmente (parágrafos, títulos, listas, tabelas, cabeçalhos e rodapés, na ordem do documento) e nunca passa por OCR; o texto lido segue como texto nativo, e a origem de cada evidência é o bloco lógico numerado (campo `page`), pois DOCX não tem páginas fixas (SPEC-004). Texto nativo é enviado ao Gemini em faixas de `EXTRACTION_PAGES_PER_CALL` páginas (padrão 30) e os resultados são mesclados; PDF escaneado e imagem vão em uma única chamada. Cada evidência registra `extraction_method` e `confidence`; confiança abaixo do limiar configurado marca `low_confidence=true` e dispara `BROKER_GUIDANCE`. Um adaptador de OCR dedicado (por exemplo, Tesseract) pode ser acrescentado atrás da mesma porta se os golden datasets mostrarem necessidade.
+
+### Modo local (desenvolvimento)
+
+`AI_PROVIDER=local` troca o Gemini por extrator, avaliador e redator determinísticos (ADR-026). O extrator busca as variantes do catálogo no texto nativo e cita a linha; PDF escaneado e imagem não geram ocorrências. O avaliador dá 1,00 ao conceito contratado e 0,25 à mera menção. O redator mantém a conclusão determinística. O modo é recusado com `APP_ENV=production` e não substitui a validação com o Gemini.
 
 ### Comportamentos obrigatórios
 
@@ -68,8 +72,10 @@ A leitura nativa (biblioteca de PDF na infraestrutura) é usada quando há camad
 |---|---|
 | Informação ausente | `value: null`, `missing_reason: NOT_FOUND` ou `NOT legible`; não preencher |
 | Ambiguidade | preservar alternativas/texto e `ambiguous: true`; não escolher silenciosamente |
-| JSON inválido | uma tentativa de reparo estruturado limitada; se falhar, `INVALID_MODEL_OUTPUT` |
-| Timeout/429/5xx | retry exponencial limitado; depois `retryable=true` ou `FAILED` |
+| JSON inválido | nova tentativa dentro do limite de `AI_MAX_ATTEMPTS`; se falhar, `INVALID_MODEL_OUTPUT` com `retryable=true` |
+| Timeout/429/5xx | retry exponencial limitado; depois `MODEL_UNAVAILABLE` ou `MODEL_RATE_LIMITED` com `retryable=true` |
+| 4xx do provedor | sem retry: `AI_AUTH_FAILED`, `AI_MODEL_NOT_FOUND` ou `AI_BAD_REQUEST`, com `retryable=false` |
+| Resposta cortada por tamanho | `AI_OUTPUT_TRUNCATED`, sem retry, `retryable=false` |
 | Documento inválido | falha de validação antes do provider quando possível |
 | Valores contraditórios | preservar as evidências conflitantes e marcar `CONFLICTING_EVIDENCE` |
 | Página ilegível ou OCR inconsistente | evidência com `low_confidence`, campo ausente/ambíguo e `BROKER_GUIDANCE`; nunca estimar |
@@ -79,7 +85,7 @@ A leitura nativa (biblioteca de PDF na infraestrutura) é usada quando há camad
 
 ### Retry padrão
 
-No máximo 3 tentativas por operação, com timeout configurável e backoff, por exemplo 1s, 2s, 4s com jitter. Não repetir erro de schema deterministicamente sem modificar/diagnosticar a entrada. Circuit breaker é evolução futura.
+No máximo `AI_MAX_ATTEMPTS` tentativas (padrão 3) por operação, com timeout configurável e backoff exponencial com jitter. Limite de uso (429) espera o tempo pedido pelo provedor, em orçamento próprio, e só então vira `MODEL_RATE_LIMITED`. Não repetir erro de schema deterministicamente sem modificar/diagnosticar a entrada. Circuit breaker é evolução futura.
 
 ## 5. Schema JSON de extração
 

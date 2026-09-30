@@ -1,22 +1,16 @@
 import { useState, type FormEvent } from 'react';
 import { navigate, paths } from '../../app/router';
-import { Badge } from '../../components/Badge';
-import { BrokerNotice } from '../../components/BrokerNotice';
 import { Icon } from '../../components/Icon';
 import { PageHeader } from '../../components/PageHeader';
 import { EmptyState, ErrorState, LoadingState } from '../../components/StateViews';
-import { COMPARABLE_POLICY_STATUSES, clauseApi } from '../../services/api/clause-api';
-import {
-  DOCUMENT_TYPE_LABELS,
-  POLICY_SLOT_LABELS,
-  POLICY_STATUS_LABELS,
-  PROFILE_LABELS,
-} from '../../shared/labels';
-import { policyStatusTone } from '../../shared/tones';
+import { clauseApi } from '../../services/api/clause-api';
+import { POLICY_STATUS_LABELS } from '../../shared/labels';
+import { compareBlocker, isComparable } from '../../shared/compareSelection';
 import { hasBusyPolicy, PROCESSING_POLL_MS } from '../../shared/processing';
 import { useApiData } from '../../shared/useApiData';
 import type { PolicySummary, RiskProfile } from '../../types/domain';
-import { PROFILE_DESCRIPTIONS, PROFILE_ORDER } from './profiles';
+import { AdvancedOptions } from './AdvancedOptions';
+import { PolicySlot } from './PolicySlot';
 
 type ComparePageProps = {
   initialA?: string;
@@ -33,7 +27,7 @@ export function ComparePage({ initialA, initialB }: ComparePageProps) {
     <div className="page">
       <PageHeader
         title="Comparar apólices"
-        subtitle="Escolha exatamente duas apólices. Os mesmos conceitos, critérios e pesos valem para as duas."
+        subtitle="Escolha duas apólices prontas. Os mesmos conceitos, critérios e pesos valem para as duas."
       />
       {state.status === 'loading' && <LoadingState label="Carregando apólices…" />}
       {state.status === 'error' && <ErrorState message={state.message} onRetry={state.reload} />}
@@ -47,14 +41,9 @@ export function ComparePage({ initialA, initialB }: ComparePageProps) {
 type CompareFormProps = ComparePageProps & { policies: PolicySummary[] };
 
 function CompareForm({ policies, initialA, initialB }: CompareFormProps) {
-  const comparable = policies.filter((policy) =>
-    COMPARABLE_POLICY_STATUSES.includes(policy.status),
-  );
-  const unavailable = policies.filter(
-    (policy) => !COMPARABLE_POLICY_STATUSES.includes(policy.status),
-  );
+  const comparableCount = policies.filter(isComparable).length;
   const validInitial = (id?: string) =>
-    comparable.some((policy) => policy.id === id) ? (id ?? '') : '';
+    policies.some((policy) => policy.id === id && isComparable(policy)) ? (id ?? '') : '';
 
   const [policyAId, setPolicyAId] = useState(validInitial(initialA));
   const [policyBId, setPolicyBId] = useState(validInitial(initialB));
@@ -62,12 +51,18 @@ function CompareForm({ policies, initialA, initialB }: CompareFormProps) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (comparable.length < 2) {
+  if (comparableCount < 2) {
+    const reading = policies.filter((policy) => policy.status === 'PROCESSING').length;
     return (
       <EmptyState
         icon="policy"
+        illustration="compare"
         title="São necessárias duas apólices processadas"
-        text="Adicione outra apólice e aguarde o processamento para comparar."
+        text={
+          reading > 0
+            ? `Há ${reading} ${reading === 1 ? 'apólice sendo lida' : 'apólices sendo lidas'}. Volte em alguns minutos ou adicione outra.`
+            : 'Adicione outra apólice e aguarde o processamento para comparar.'
+        }
         action={
           <a className="btn btn--primary" href={paths.newPolicy}>
             Adicionar apólice
@@ -77,8 +72,10 @@ function CompareForm({ policies, initialA, initialB }: CompareFormProps) {
     );
   }
 
+  const blocker = compareBlocker(policyAId, policyBId);
   const samePolicy = policyAId !== '' && policyAId === policyBId;
-  const canSubmit = policyAId !== '' && policyBId !== '' && !samePolicy && !submitting;
+  const canSubmit = blocker === null && !submitting;
+  const busy = policies.filter((policy) => !isComparable(policy));
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -100,34 +97,27 @@ function CompareForm({ policies, initialA, initialB }: CompareFormProps) {
 
   return (
     <form className="stack" onSubmit={onSubmit} noValidate>
-      <PolicySlot
-        slot="A"
-        value={policyAId}
-        onChange={setPolicyAId}
-        policies={comparable}
-        disabledId={policyBId}
-      />
-      <div className="versus" aria-hidden="true">
-        ×
+      <div className="slots">
+        <PolicySlot slot="A" value={policyAId} onChange={setPolicyAId} policies={policies} />
+        <div className="versus" aria-hidden="true">
+          ×
+        </div>
+        <PolicySlot slot="B" value={policyBId} onChange={setPolicyBId} policies={policies} />
       </div>
-      <PolicySlot
-        slot="B"
-        value={policyBId}
-        onChange={setPolicyBId}
-        policies={comparable}
-        disabledId={policyAId}
-      />
 
-      {samePolicy && (
-        <p className="field-error" role="alert">
-          Escolha duas apólices diferentes.
-        </p>
-      )}
+      <div aria-live="polite">
+        {samePolicy && (
+          <p className="field-error" role="alert">
+            <Icon name="alert" size={16} />
+            As duas apólices escolhidas são a mesma. Escolha duas apólices diferentes.
+          </p>
+        )}
+      </div>
 
-      {unavailable.length > 0 && (
+      {busy.length > 0 && (
         <p className="muted-text">
           <Icon name="info" size={16} /> Indisponíveis para comparação:{' '}
-          {unavailable
+          {busy
             .map(
               (policy) =>
                 `${policy.insurer} (${POLICY_STATUS_LABELS[policy.status].toLowerCase()})`,
@@ -137,30 +127,7 @@ function CompareForm({ policies, initialA, initialB }: CompareFormProps) {
         </p>
       )}
 
-      <fieldset className="card profile-picker">
-        <legend className="section-title">Perfil de risco em destaque</legend>
-        <p className="muted-text">
-          Todos os perfis são calculados. O escolhido abre em destaque; os pesos-base nunca são
-          alterados.
-        </p>
-        <div className="radio-list">
-          {PROFILE_ORDER.map((option) => (
-            <label key={option} className="radio-card">
-              <input
-                type="radio"
-                name="profile"
-                value={option}
-                checked={profile === option}
-                onChange={() => setProfile(option)}
-              />
-              <span>
-                <strong>{PROFILE_LABELS[option]}</strong>
-                <small>{PROFILE_DESCRIPTIONS[option]}</small>
-              </span>
-            </label>
-          ))}
-        </div>
-      </fieldset>
+      <AdvancedOptions profile={profile} onChange={setProfile} />
 
       {error && (
         <p className="field-error" role="alert">
@@ -168,59 +135,24 @@ function CompareForm({ policies, initialA, initialB }: CompareFormProps) {
         </p>
       )}
 
-      <button type="submit" className="btn btn--primary btn--block" disabled={!canSubmit}>
-        <Icon name="scale" size={20} />
-        {submitting ? 'Comparando…' : 'Comparar apólices'}
+      <button
+        type="submit"
+        className="btn btn--primary btn--block btn--stacked"
+        disabled={!canSubmit}
+        aria-describedby="compare-hint"
+      >
+        <span className="btn__row">
+          <Icon name="scale" size={20} />
+          {submitting ? 'Comparando…' : 'Comparar'}
+        </span>
+        <span id="compare-hint" className="btn__hint" aria-live="polite">
+          {blocker}
+        </span>
       </button>
       <a className="btn btn--ghost btn--block" href={paths.newPolicy}>
         <Icon name="plus" size={18} />
         Adicionar outra apólice
       </a>
     </form>
-  );
-}
-
-type PolicySlotProps = {
-  slot: 'A' | 'B';
-  value: string;
-  onChange: (id: string) => void;
-  policies: PolicySummary[];
-  disabledId: string;
-};
-
-function PolicySlot({ slot, value, onChange, policies, disabledId }: PolicySlotProps) {
-  const selected = policies.find((policy) => policy.id === value);
-  const selectId = `policy-${slot}`;
-  return (
-    <section className="card slot">
-      <label htmlFor={selectId} className="slot__label">
-        {POLICY_SLOT_LABELS[slot]}
-      </label>
-      <select id={selectId} value={value} onChange={(event) => onChange(event.target.value)}>
-        <option value="">Selecione uma apólice</option>
-        {policies.map((policy) => (
-          <option key={policy.id} value={policy.id} disabled={policy.id === disabledId}>
-            {policy.insurer} — {policy.name}
-          </option>
-        ))}
-      </select>
-      {selected && (
-        <div className="slot__details">
-          <Badge tone={policyStatusTone(selected.status)}>
-            {POLICY_STATUS_LABELS[selected.status]}
-          </Badge>
-          <p className="tag-row">
-            {selected.documents.map((document) => (
-              <span key={document.id} className="tag">
-                {DOCUMENT_TYPE_LABELS[document.type]}
-              </span>
-            ))}
-          </p>
-          {selected.alerts.map((alert) => (
-            <BrokerNotice key={alert} reason={alert} compact />
-          ))}
-        </div>
-      )}
-    </section>
   );
 }

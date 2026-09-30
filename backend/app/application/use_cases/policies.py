@@ -2,11 +2,22 @@
 (SPEC-001 to SPEC-006, SPEC-015)."""
 
 import asyncio
+import contextlib
 from dataclasses import dataclass
 from uuid import uuid4
 
 from app.application.commands import CreatePolicyCommand, UploadedFile
 from app.application.errors import conflict, invalid, not_found
+from app.application.file_types import (
+    DOCX_MAX_EXPANSION_RATIO,
+    DOCX_MIME,
+    FILE_EXTENSIONS,
+    PDF_MIME,
+    OfficeProblem,
+    detect_content_type,
+    diagnose_office_problem,
+    docx_expanded_size,
+)
 from app.domain.entities import (
     ConceptOccurrence,
     DocumentIntake,
@@ -20,9 +31,13 @@ from app.domain.interfaces.ports import (
     BlobStorage,
     ConceptCatalog,
     DocumentContent,
+    DocumentUnreadableError,
+    DocxTextReader,
+    PdfText,
     PdfTextReader,
     PolicyExtractor,
     PolicyRepository,
+    StoredObject,
 )
 from app.domain.services.guardrails import (
     enforce_contract_rule,
@@ -37,7 +52,7 @@ from app.domain.value_objects import (
     Level,
     PolicyStatus,
 )
-from app.shared.exceptions import ApplicationError
+from app.shared.exceptions import ApplicationError, InfrastructureError
 from app.shared.logging import get_logger, log_context
 
 POLICY_UPLOADED = "PolicyUploaded"
@@ -45,20 +60,33 @@ NOT_IDENTIFIED = "Não identificado"
 
 logger = get_logger(__name__)
 
-_SIGNATURES = {
-    b"%PDF": "application/pdf",
-    b"\x89PNG\r\n\x1a\n": "image/png",
-    b"\xff\xd8\xff": "image/jpeg",
+_OFFICE_ERRORS = {
+    OfficeProblem.PROTECTED: (
+        "DOCX_PROTECTED",
+        "O arquivo {name} está protegido por senha ou está em formato antigo (.doc). "
+        "Remova a proteção e envie novamente como .docx.",
+    ),
+    OfficeProblem.CORRUPTED: (
+        "DOCX_CORRUPTED",
+        "O arquivo {name} está corrompido e não pôde ser aberto. Gere o DOCX novamente.",
+    ),
 }
 
+_PDF_PROTECTED = (
+    "PDF_PROTECTED",
+    "O arquivo {name} está protegido por senha. Remova a proteção e envie novamente.",
+)
+_PDF_CORRUPTED = (
+    "PDF_CORRUPTED",
+    "O arquivo {name} está corrompido e não pôde ser aberto. Gere o PDF novamente.",
+)
 
-def detect_content_type(data: bytes) -> str | None:
-    """Detect the MIME type by content, not by the declared header (SPEC-001)."""
 
-    head = data[:16].lstrip()
-    return next(
-        (mime for signature, mime in _SIGNATURES.items() if head.startswith(signature)), None
-    )
+def _check_pdf(pdf: PdfText, filename: str) -> None:
+    problem = _PDF_PROTECTED if pdf.encrypted else _PDF_CORRUPTED if pdf.unreadable else None
+    if problem is not None:
+        code, message = problem
+        raise invalid(code, message.format(name=filename), status_code=422)
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,6 +94,12 @@ class UploadLimits:
     max_file_bytes: int
     max_files: int
     min_evidence_confidence: float
+
+
+def _initial_file_kind(content_type: str) -> FileKind:
+    if content_type == PDF_MIME:
+        return FileKind.SEARCHABLE_PDF
+    return FileKind.DOCX if content_type == DOCX_MIME else FileKind.IMAGE
 
 
 class PolicyService:
@@ -76,6 +110,7 @@ class PolicyService:
         catalog: ConceptCatalog,
         extractor: PolicyExtractor,
         pdf_reader: PdfTextReader,
+        docx_reader: DocxTextReader,
         event_bus: EventBus,
         limits: UploadLimits,
     ) -> None:
@@ -84,13 +119,14 @@ class PolicyService:
         self._catalog = catalog
         self._extractor = extractor
         self._pdf_reader = pdf_reader
+        self._docx_reader = docx_reader
         self._event_bus = event_bus
         self._limits = limits
         self._running_tasks: dict[str, asyncio.Task[None]] = {}
 
     # ---------- Commands ----------
 
-    def _validate(self, files: list[UploadedFile]) -> list[str]:
+    async def _validate(self, files: list[UploadedFile]) -> list[str]:
         if not files:
             raise invalid("INVALID_FILE", "Envie ao menos um arquivo.")
         if len(files) > self._limits.max_files:
@@ -107,25 +143,55 @@ class PolicyService:
                 )
             detected = detect_content_type(file.data)
             if detected is None:
-                raise invalid(
-                    "UNSUPPORTED_MEDIA_TYPE",
-                    f"Formato não aceito: {file.filename}. Use PDF, JPG ou PNG.",
-                    status_code=415,
-                )
+                raise self._unsupported(file)
+            if detected == DOCX_MIME:
+                await self._validate_docx(file)
+            elif detected == PDF_MIME:
+                _check_pdf(await asyncio.to_thread(self._pdf_reader.read, file.data), file.filename)
             content_types.append(detected)
         return content_types
 
+    @staticmethod
+    def _unsupported(file: UploadedFile) -> ApplicationError:
+        problem = diagnose_office_problem(file.data, file.filename)
+        if problem is not None:
+            code, message = _OFFICE_ERRORS[problem]
+            return invalid(code, message.format(name=file.filename), status_code=422)
+        return invalid(
+            "UNSUPPORTED_MEDIA_TYPE",
+            f"Formato não aceito: {file.filename}. Use PDF, DOCX, JPG ou PNG.",
+            status_code=415,
+        )
+
+    async def _validate_docx(self, file: UploadedFile) -> None:
+        """Reject zip bombs and DOCX that cannot be parsed before storing anything."""
+
+        if docx_expanded_size(file.data) > self._limits.max_file_bytes * DOCX_MAX_EXPANSION_RATIO:
+            raise invalid(
+                "FILE_TOO_LARGE",
+                f"O conteúdo do arquivo {file.filename} excede o limite permitido.",
+                status_code=413,
+            )
+        try:
+            await asyncio.to_thread(self._docx_reader.read, file.data)
+        except DocumentUnreadableError:
+            code, message = _OFFICE_ERRORS[OfficeProblem.CORRUPTED]
+            raise invalid(code, message.format(name=file.filename), status_code=422) from None
+
     async def create_policy(self, command: CreatePolicyCommand) -> Policy:
-        content_types = self._validate(command.files)
+        content_types = await self._validate(command.files)
         policy_id = f"pol_{uuid4().hex[:16]}"
         documents: list[PolicyDocument] = []
         for index, (file, content_type) in enumerate(
             zip(command.files, content_types, strict=True)
         ):
             document_id = f"{policy_id}_doc_{index + 1}"
-            extension = {"application/pdf": "pdf", "image/png": "png"}.get(content_type, "jpg")
-            stored = await self._storage.put(
-                f"policies/{policy_id}/{document_id}.{extension}", file.data, content_type
+            extension = FILE_EXTENSIONS[content_type]
+            stored = await self._store(
+                f"policies/{policy_id}/{document_id}.{extension}",
+                file.data,
+                content_type,
+                already_stored=[d.storage_key for d in documents],
             )
             documents.append(
                 PolicyDocument(
@@ -134,13 +200,11 @@ class PolicyService:
                     filename=file.filename[:200],
                     type=file.document_type,
                     content_type=content_type,
-                    file_kind=FileKind.IMAGE
-                    if content_type != "application/pdf"
-                    else FileKind.SEARCHABLE_PDF,
+                    file_kind=_initial_file_kind(content_type),
                     size_bytes=stored.size_bytes,
                     checksum_sha256=stored.checksum_sha256,
                     storage_key=stored.storage_key,
-                    ocr_required=content_type != "application/pdf",
+                    ocr_required=content_type not in (PDF_MIME, DOCX_MIME),
                 )
             )
         policy = Policy(
@@ -156,6 +220,24 @@ class PolicyService:
         )
         return policy
 
+    async def _store(
+        self, key: str, data: bytes, content_type: str, already_stored: list[str]
+    ) -> StoredObject:
+        """Store one original; on failure remove the ones already stored (no orphan files)."""
+
+        try:
+            return await self._storage.put(key, data, content_type)
+        except Exception as exc:
+            for stored_key in already_stored:
+                with contextlib.suppress(Exception):
+                    await self._storage.delete(stored_key)
+            logger.exception("Storage failed during upload")
+            raise InfrastructureError(
+                "Não foi possível armazenar o arquivo. Tente novamente em instantes.",
+                code="STORAGE_UNAVAILABLE",
+                details={"retryable": True},
+            ) from exc
+
     # ---------- Worker ----------
 
     async def handle_policy_uploaded(self, event: Event) -> None:
@@ -166,10 +248,23 @@ class PolicyService:
         if policy is None or policy.status != PolicyStatus.PROCESSING:
             return  # idempotent: already processed
 
-        current_task = asyncio.current_task()
-        if current_task is not None:
-            self._running_tasks[policy_id] = current_task
+        # Run in its own task: cancelling a policy must stop this job, not the
+        # queue worker that is executing the handler.
+        job = asyncio.create_task(self._process(policy))
+        self._running_tasks[policy_id] = job
+        try:
+            await job
+        except asyncio.CancelledError:
+            current = asyncio.current_task()
+            if current is not None and current.cancelling():
+                job.cancel()  # the worker itself is stopping (shutdown)
+                raise
+            logger.info("Policy processing cancelled via task cancellation")
+        finally:
+            self._running_tasks.pop(policy_id, None)
 
+    async def _process(self, policy: Policy) -> None:
+        policy_id = policy.id
         try:
             knowledge_base = self._catalog.load()
             occurrences: list[ConceptOccurrence] = []
@@ -183,14 +278,26 @@ class PolicyService:
                         return
 
                     try:
-                        found, intake = await self._process_document(policy, document, knowledge_base)
+                        found, intake = await self._process_document(
+                            policy, document, knowledge_base
+                        )
                         occurrences.extend(found)
                         intakes.append((document, intake))
                     except ApplicationError as exc:
-                        self._fail(document, exc.message)
+                        self._fail(
+                            document,
+                            exc.message,
+                            exc.code,
+                            bool((exc.details or {}).get("retryable")),
+                        )
                     except Exception:
                         logger.exception("Document processing failed")
-                        self._fail(document, "Falha inesperada ao processar o documento.")
+                        self._fail(
+                            document,
+                            "Falha inesperada ao processar o documento.",
+                            "UNEXPECTED_ERROR",
+                            retryable=True,
+                        )
                     await self._save(policy)
 
                 fresh = await self._repository.get(policy_id)
@@ -214,10 +321,8 @@ class PolicyService:
                 await self._save(policy)
                 logger.info("Policy processed")
         except asyncio.CancelledError:
-            logger.info("Policy processing cancelled via task cancellation")
+            logger.info("Policy processing cancelled")
             raise
-        finally:
-            self._running_tasks.pop(policy_id, None)
 
     async def cancel_policy(self, policy_id: str) -> Policy:
         policy = await self.get_policy(policy_id)
@@ -257,12 +362,15 @@ class PolicyService:
         data = await self._storage.get(document.storage_key)
 
         page_texts: dict[int, str] = {}
-        if document.content_type == "application/pdf":
-            pdf = self._pdf_reader.read(data)
+        if document.content_type == PDF_MIME:
+            pdf = await asyncio.to_thread(self._pdf_reader.read, data)
+            _check_pdf(pdf, document.filename)
             document.pages = max(pdf.page_count, 1)
             document.file_kind = FileKind.SEARCHABLE_PDF if pdf.searchable else FileKind.SCANNED_PDF
             document.ocr_required = not pdf.searchable
             page_texts = pdf.page_texts if pdf.searchable else {}
+        elif document.content_type == DOCX_MIME:
+            page_texts = await self._read_docx(document, data)
         else:
             document.pages = 1
 
@@ -289,10 +397,34 @@ class PolicyService:
         document.status = DocumentStatus.COMPLETED
         return checked, result.intake
 
+    async def _read_docx(self, document: PolicyDocument, data: bytes) -> dict[int, str]:
+        """DOCX never needs OCR: its text follows the same path as native PDF text."""
+
+        try:
+            docx = await asyncio.to_thread(self._docx_reader.read, data)
+        except DocumentUnreadableError:
+            raise invalid(
+                "DOCX_CORRUPTED",
+                f"O arquivo {document.filename} está corrompido e não pôde ser lido.",
+                status_code=422,
+            ) from None
+        if not docx.has_text:
+            raise invalid(
+                "DOCX_WITHOUT_TEXT",
+                f"O arquivo {document.filename} não contém texto legível.",
+                status_code=422,
+            )
+        document.pages = docx.page_count
+        document.file_kind = FileKind.DOCX
+        document.ocr_required = False
+        return docx.page_texts
+
     @staticmethod
-    def _fail(document: PolicyDocument, message: str) -> None:
+    def _fail(document: PolicyDocument, message: str, code: str, retryable: bool = False) -> None:
         document.status = DocumentStatus.FAILED
         document.failure = message
+        document.failure_code = code
+        document.failure_retryable = retryable
 
     @staticmethod
     def _apply_intake(policy: Policy, intakes: list[tuple[PolicyDocument, DocumentIntake]]) -> None:

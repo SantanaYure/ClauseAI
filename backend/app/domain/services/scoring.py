@@ -17,6 +17,7 @@ from app.domain.entities import (
     ExecutiveSummary,
     KnowledgeBase,
     Policy,
+    PolicyDocument,
     ProfileResult,
     QualityCheck,
     ScoreSummary,
@@ -26,6 +27,7 @@ from app.domain.value_objects import (
     ContractStatus,
     DecisionMode,
     DocumentType,
+    FileKind,
     Importance,
     Level,
     RiskProfile,
@@ -122,6 +124,26 @@ def default_assessment(pair: ConceptPair) -> ConceptAssessment:
         a=decision(pair.a),
         b=decision(pair.b),
         main_difference="",
+    )
+
+
+def unassessed_assessment(pair: ConceptPair) -> ConceptAssessment:
+    """Placeholder when the AI assessment is unavailable: no points, low confidence.
+
+    The pair keeps its documentary status and evidence but never counts as
+    sufficient, so the score is not inflated and the item asks for broker review.
+    """
+
+    def decision() -> AssessmentDecision:
+        return AssessmentDecision(
+            base_result=0,
+            adjustment_factor=0,
+            justification="Avaliação por IA indisponível; pontuação não atribuída.",
+            confidence=Level.LOW,
+        )
+
+    return ConceptAssessment(
+        concept_id=pair.concept.id, a=decision(), b=decision(), main_difference=""
     )
 
 
@@ -452,6 +474,17 @@ def build_summary(
     )
 
 
+def _units_detail(documents: list[PolicyDocument]) -> str:
+    """DOCX has no fixed pages: its logical pages are reported as blocks."""
+
+    pages = sum(d.pages for d in documents if d.file_kind != FileKind.DOCX)
+    blocks = sum(d.pages for d in documents if d.file_kind == FileKind.DOCX)
+    parts = [f"{pages} páginas"] if pages or not blocks else []
+    if blocks:
+        parts.append(f"{blocks} blocos (DOCX)")
+    return " e ".join(parts) + "."
+
+
 def build_quality_gate(
     a: Policy,
     b: Policy,
@@ -494,23 +527,34 @@ def build_quality_gate(
         for side in (i.a, i.b)
     )
 
+    kinds = {d.file_kind for d in documents}
+    only_docx = kinds == {FileKind.DOCX}
+    processed_label = (
+        "Todas as páginas foram processadas"
+        if FileKind.DOCX not in kinds
+        else "Todos os blocos foram processados"
+        if only_docx
+        else "Todas as páginas e todos os blocos foram processados"
+    )
+    origin = "página" if FileKind.DOCX not in kinds else "bloco" if only_docx else "página ou bloco"
+
     def check(check_id: str, label: str, passed: bool, detail: str) -> QualityCheck:
         return QualityCheck(id=check_id, label=label, passed=passed, detail=detail)
 
     return [
-        check("files", "Todos os PDFs e imagens foram lidos",
+        check("files", "Todos os documentos foram lidos",
               all(d.status == "COMPLETED" for d in documents),
               f"{len(documents)} documento(s) processado(s)."),
         check("ocr", "OCR avaliado quanto à confiança", min_confidence >= params.ocr_min_confidence,
               f"OCR usado em {', '.join(ocr_documents)}; menor confiança {min_confidence:.2f}."
               if ocr_documents else "Nenhum documento precisou de OCR."),
-        check("pages", "Todas as páginas foram processadas", all(d.pages > 0 for d in documents),
-              f"{sum(d.pages for d in documents)} páginas."),
+        check("pages", processed_label, all(d.pages > 0 for d in documents),
+              _units_detail(documents)),
         check("classification", "Documentos classificados",
               all(d.type != DocumentType.OTHER for d in documents),
               f"{', '.join(only_conditions)}: somente condições gerais ou propostas."
               if only_conditions else "Tipos de documento identificados."),
-        check("references", "Evidências com página e cláusula",
+        check("references", f"Evidências com {origin} e cláusula",
               all(e.page > 0 and e.clause for e in evidences), f"{len(evidences)} evidência(s)."),
         check("coverage", "Todos os conceitos ponderados pesquisados",
               len(items) == len(knowledge_base.weighted),

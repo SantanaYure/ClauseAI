@@ -208,3 +208,30 @@ Status permitido: `Accepted`, `Proposed`, `Superseded`. ADRs registram decisões
 - **Alternativas:** Groq no plano pago (Dev Tier); outro provedor para a avaliação.
 - **Consequências:** uma chave, uma integração e comparações mais rápidas; perde-se a separação entre o modelo que extrai e o que avalia.
 - **Riscos:** o mesmo modelo lê e avalia, e pode repetir um erro de leitura na avaliação. Mitigado pelas travas determinísticas, pela exigência de evidência literal e pelo Quality Gate. O limite de uso do Gemini segue tratado com espera pelo tempo pedido (HTTP 429).
+
+## ADR-024 — Suporte a DOCX com leitura local
+
+- **Status:** Accepted (complementa o ADR-019)
+- **Contexto/problema:** apólices reais chegam também em Word. O sistema só aceitava PDF e imagem, e a comparação misturando formatos não era possível.
+- **Decisão:** aceitar DOCX, detectado pelo conteúdo (zip com `[Content_Types].xml` e `word/document.xml`). O texto é lido localmente, nunca por OCR, na ordem do documento: parágrafos, títulos, listas, tabelas, cabeçalhos e rodapés. A evidência tem origem estável em blocos lógicos numerados a partir de 1 (campo `page`), pois DOCX não tem páginas fixas. O bloco muda em quebra de página explícita, quebra de seção ou a cada 3.500 caracteres, sempre entre parágrafos. A interface diz "bloco" para DOCX. Comparações PDF × PDF, DOCX × DOCX e PDF × DOCX usam o mesmo pipeline. Erros têm código próprio: `DOCX_CORRUPTED`, `DOCX_PROTECTED` (senha ou `.doc` legado) e `DOCX_WITHOUT_TEXT`, todos 422, além de `UNSUPPORTED_MEDIA_TYPE` (415) para XLSX, PPTX, `.docm`, `.dotx` e outros zips. Zip que descompacta acima de 20 × o limite de upload vira `FILE_TOO_LARGE`.
+- **Alternativas:** converter DOCX em PDF e usar OCR; enviar o DOCX ao modelo como arquivo.
+- **Consequências:** texto exato, sem erro de OCR, e sem custo de modelo na leitura; um adapter novo na infraestrutura; a origem da evidência deixa de ser sempre uma página.
+- **Riscos:** o mesmo conteúdo em PDF e em DOCX gerar origens diferentes; mitigado por golden datasets com os dois formatos. Limitações conhecidas: numeração automática de listas e cláusulas do Word, notas de rodapé e caixas de texto não são extraídas (SPEC-004).
+
+## ADR-025 — Remake visual e identidade de marca
+
+- **Status:** Accepted
+- **Contexto/problema:** a interface precisa de aparência de produto, com hierarquia clara e menos esforço do usuário, na linha de Don Norman (visibilidade, feedback, prevenção de erro).
+- **Decisão:** adotar a identidade da SPEC-010: IBM Plex Sans 500/600 e Roboto 400/500; marca `#000000`, `#F9EFE5` e `#FFD700`; base `#7F8790`, `#8F92A1` e `#F8F8F8`. As cores de notificação e de parecer (`--tone-*`) não mudam. Texto secundário usa `#565D67`, porque `#7F8790` dá 3,2:1 sobre o creme e fica só para decoração e ícones. Selos de status de processamento são só azul ou neutro. O amarelo da marca é só acento, nunca selo de resultado. Selos têm ícone e texto. Menu inferior no celular e lateral em telas largas. Envio com validação por arquivo, processamento em 3 passos (Recebido, Lendo, Conferindo), escolha das apólices em dois slots (A e B), perfil de risco em opções avançadas e resultado em ordem fixa: conclusão, dois placares, vantagens e atenção, "Ver cálculo" recolhido. "Consulte seu corretor de seguros." sempre visível.
+- **Alternativas:** manter o visual anterior; usar a paleta de resultado também na marca.
+- **Consequências:** interface consistente e mais simples de entender; o cálculo continua acessível, mas fora do caminho principal.
+- **Riscos:** contraste baixo do texto sobre `#F9EFE5` e `#FFD700`, e confusão entre o amarelo da marca e o de parecer; mitigados por teste de acessibilidade e pela regra de ícone e texto em todo selo.
+
+## ADR-026 — Modo local de IA para desenvolvimento
+
+- **Status:** Accepted
+- **Contexto/problema:** rodar o sistema exigia chave do Gemini e, por padrão, credenciais do Firebase. Isso atrapalha o desenvolvimento, a demonstração offline e os testes manuais na interface.
+- **Decisão:** `AI_PROVIDER` aceita `gemini` (padrão) ou `local`. O modo local usa extrator, avaliador e redator determinísticos, sem chamar modelo. O extrator busca as variantes do catálogo no texto nativo (PDF com texto e DOCX) e cita a linha literal; PDF escaneado e imagem não geram ocorrências. O avaliador dá Resultado-base 1,00 para conceito contratado e 0,25 para mera menção, com Fator de Ajuste 1,00. O redator mantém a conclusão determinística. O modo é recusado com `APP_ENV=production`. Junto com `PERSISTENCE_BACKEND=memory` e `STORAGE_BACKEND=local`, o sistema roda sem nenhuma credencial. O app FastAPI é criado sob demanda no primeiro acesso a `app.main:app`, então importar o módulo não exige configuração.
+- **Alternativas:** dublês só em testes automatizados; emulador do Gemini.
+- **Consequências:** desenvolvimento e demonstração sem serviços externos; os resultados do modo local não têm valor de negócio.
+- **Riscos:** confundir o modo local com resultado real. Mitigado pela recusa em produção e pelo modelo registrado como `local-deterministic`.

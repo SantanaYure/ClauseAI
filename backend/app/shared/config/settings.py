@@ -39,12 +39,19 @@ class Settings(BaseSettings):
     firebase_private_key: str | None = None
     firebase_storage_bucket: str | None = None
 
+    # AI provider: "gemini" (default, needs GEMINI_API_KEY) or "local" (deterministic
+    # stand-in for development without external services; refused in production).
+    ai_provider: Literal["gemini", "local"] = "gemini"
+
     # Gemini 3.5 Flash Lite: extraction, OCR, concept assessment and conclusion (ADR-006, ADR-023).
     gemini_api_key: str | None = None
     gemini_model: str = "gemini-3.5-flash-lite"
 
     # Concepts per assessment call (P-ASSESS-001).
     assessment_batch_size: int = Field(default=10, ge=1, le=31)
+
+    # Native-text pages sent per extraction call; longer documents are read in ranges.
+    extraction_pages_per_call: int = Field(default=30, ge=1, le=200)
 
     ai_timeout_seconds: float = 120.0
     ai_max_attempts: int = Field(default=3, ge=1, le=5)
@@ -79,7 +86,11 @@ class Settings(BaseSettings):
     def missing_required(self) -> list[str]:
         """Names of the variables the configured runtime still needs."""
 
-        missing = [] if self.gemini_api_key else ["GEMINI_API_KEY"]
+        missing: list[str] = []
+        if self.ai_provider == "gemini" and not self.gemini_api_key:
+            missing.append("GEMINI_API_KEY")
+        if self.ai_provider == "local" and self.app_env.lower() in ("production", "prod"):
+            missing.append("AI_PROVIDER diferente de local (não permitido em produção)")
         if self.storage_backend == "firebase" and not self.firebase_storage_bucket:
             missing.append("FIREBASE_STORAGE_BUCKET")
         if "firebase" in (self.persistence_backend, self.storage_backend):

@@ -2,16 +2,16 @@
 
 ## 1. Objetivo e escopo
 
-O ClauseAI recebe documentos de apólice D&O, armazena o original, extrai evidências com leitura nativa de PDF ou OCR/IA multimodal, normaliza essas evidências contra o catálogo de conceitos D&O, persiste dados estruturados, compara duas apólices conceito a conceito, calcula pontuação ponderada e apresenta um resumo executivo condicionado e rastreável. As regras de domínio vêm de [`domain/DO_KNOWLEDGE_BASE.md`](../domain/DO_KNOWLEDGE_BASE.md). O MVP privilegia execução local simples, baixa acoplagem e capacidade de substituir provedores externos sem alterar o domínio.
+O ClauseAI recebe documentos de apólice D&O, armazena o original, extrai evidências com leitura nativa de PDF, leitura local de DOCX ou OCR/IA multimodal (imagem e PDF digitalizado), normaliza essas evidências contra o catálogo de conceitos D&O, persiste dados estruturados, compara duas apólices conceito a conceito, calcula pontuação ponderada e apresenta um resumo executivo condicionado e rastreável. As regras de domínio vêm de [`domain/DO_KNOWLEDGE_BASE.md`](../domain/DO_KNOWLEDGE_BASE.md). O MVP privilegia execução local simples, baixa acoplagem e capacidade de substituir provedores externos sem alterar o domínio.
 
 ### Requisitos funcionais
 
 | ID | Requisito |
 |---|---|
-| RF-01 | Aceitar PDF e imagens suportadas pelo contrato de upload e registrar tipo de documento, seguradora, versão e vigência. |
+| RF-01 | Aceitar PDF, imagens (JPG, PNG) e DOCX, com o tipo detectado pelo conteúdo, e registrar tipo de documento, seguradora, versão e vigência. |
 | RF-02 | Armazenar original, metadados, status e histórico de processamento. |
 | RF-03 | Processar fora do ciclo da requisição de upload. |
-| RF-04 | Extrair conteúdo por leitura nativa ou OCR, com evidências literais (página, seção, cláusula, confiança). |
+| RF-04 | Extrair conteúdo por leitura nativa (PDF, DOCX) ou OCR (imagem, PDF digitalizado), com evidências literais (página ou, no DOCX, bloco lógico; cláusula; confiança). DOCX nunca usa OCR. |
 | RF-05 | Normalizar evidências contra o catálogo D&O, classificando tipo de ocorrência, relação terminológica e status. |
 | RF-06 | Consultar documentos, apólices e evidências por conceito, variante, seguradora, cláusula, página, peso e status. |
 | RF-07 | Comparar exatamente duas apólices com os mesmos conceitos, critérios e pesos. |
@@ -61,7 +61,7 @@ flowchart LR
 | Application | Orquestrar casos de uso, transações lógicas e publicação de eventos | Conhecer detalhes de HTTP, Firestore ou SDKs de IA |
 | Domain | Entidades, value objects, invariantes e comparação determinística | Importar FastAPI, Firebase ou Gemini |
 | Document Service (agente de recepção) | Validar arquivo, classificar tipo de documento, persistir original e iniciar processamento | Interpretar cláusulas |
-| Extraction Service (agente de OCR/extração) | Leitura nativa, OCR multimodal, parsing e validação de evidências | Completar texto ilegível por inferência |
+| Extraction Service (agente de OCR/extração) | Leitura nativa de PDF, leitura local de DOCX (sem OCR), OCR multimodal, parsing e validação de evidências | Completar texto ilegível por inferência |
 | Normalization Service (agente de cláusulas) | Vincular evidências a conceitos do catálogo e classificar ocorrência/relação/status | Unir conceitos distintos ou declarar equivalência automática |
 | Policy Service (agente de estruturação) | Construir e persistir estrutura de apólice e ocorrências | Fazer chamadas externas diretamente |
 | Knowledge Base | Fornecer catálogo, variantes, pesos, escalas e perfis versionados | Ser alterada pela IA |
@@ -98,7 +98,7 @@ sequenceDiagram
     participant AI as AI Orchestrator
     participant DB as Firestore
 
-    User->>UI: Seleciona PDF/imagem
+    User->>UI: Seleciona PDF, imagem ou DOCX
     UI->>API: POST /documents
     API->>App: UploadDocumentCommand
     App->>Blob: grava original

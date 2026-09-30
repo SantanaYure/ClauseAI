@@ -20,8 +20,42 @@ from app.infrastructure.ai.support import (
     parse_json_object,
     retry_after_seconds,
 )
+from app.shared.exceptions import InfrastructureError
 
 PROVIDER = "gemini"
+
+_AUTH_CODES = {401, 403}
+
+
+def classify_client_error(exc: genai_errors.ClientError) -> InfrastructureError:
+    """Map a provider 4xx to a classified, sanitized error (never the raw provider text)."""
+
+    code = getattr(exc, "code", None)
+    invalid_key = "api key" in str(exc).lower()
+    if code in _AUTH_CODES or invalid_key:
+        return InfrastructureError(
+            "A chave de acesso da IA é inválida ou não tem permissão. "
+            "Verifique a configuração do backend.",
+            code="AI_AUTH_FAILED",
+            details={"retryable": False},
+        )
+    if code == 404:
+        return InfrastructureError(
+            "O modelo de IA configurado não foi encontrado. Verifique a configuração do backend.",
+            code="AI_MODEL_NOT_FOUND",
+            details={"retryable": False},
+        )
+    return InfrastructureError(
+        "A IA recusou a requisição (dados em formato não aceito). Tente outro arquivo.",
+        code="AI_BAD_REQUEST",
+        status_code=502,
+        details={"retryable": False},
+    )
+
+
+def _was_truncated(response: types.GenerateContentResponse) -> bool:
+    candidates = response.candidates or []
+    return bool(candidates) and candidates[0].finish_reason == types.FinishReason.MAX_TOKENS
 
 
 class GeminiClient:
@@ -60,7 +94,15 @@ class GeminiClient:
                 raise RateLimitedError(str(exc), retry_after_seconds(None, str(exc))) from exc
             if getattr(exc, "code", None) == 408:
                 raise TransientProviderError(str(exc)) from exc
-            raise
+            raise classify_client_error(exc) from exc
+        if _was_truncated(response):
+            raise InfrastructureError(
+                "A resposta da IA foi cortada por exceder o tamanho máximo. "
+                "O documento é grande demais para uma única leitura; divida-o em partes menores.",
+                code="AI_OUTPUT_TRUNCATED",
+                status_code=422,
+                details={"retryable": False},
+            )
         text: str | None = response.text
         return text
 

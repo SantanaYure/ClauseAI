@@ -31,11 +31,11 @@ Regras de domínio (conceitos, pesos, escalas, pareceres, perfis, cores e frase 
 
 ### Objetivo e contexto
 
-Receber um PDF ou imagem e criar um `Document` em estado `UPLOADED` sem esperar extração. A classificação do documento (tipo, seguradora, vigência, versão, necessidade de OCR) ocorre no início do processamento com `P-INTAKE-001`.
+Receber um PDF, uma imagem (JPG, PNG) ou um DOCX e criar um `Document` em estado `UPLOADED` sem esperar extração. A classificação do documento (tipo, seguradora, vigência, versão, necessidade de OCR) ocorre no início do processamento com `P-INTAKE-001`.
 
 ### Comportamento, entradas e saídas
 
-- Entrada: multipart `file`, MIME detectável, tamanho dentro do limite configurado e metadados opcionais.
+- Entrada: multipart `file`, MIME detectável, tamanho dentro do limite configurado e metadados opcionais. Formatos aceitos: PDF, JPG, PNG e DOCX.
 - Saída: `document_id`, `status`, `correlation_id`, `status_url`, HTTP `202`.
 - Publica `DocumentUploaded` somente após persistir original e metadados.
 
@@ -45,15 +45,53 @@ Receber um PDF ou imagem e criar um `Document` em estado `UPLOADED` sem esperar 
 
 ### Regras e erros
 
-Aceitar somente `application/pdf` e imagens explicitamente configuradas; validar MIME por conteúdo quando possível; rejeitar vazio, excesso de tamanho e metadata inválida. Erros: `INVALID_FILE`, `UNSUPPORTED_MEDIA_TYPE`, `FILE_TOO_LARGE`, `STORAGE_UNAVAILABLE`.
+Aceitar somente `application/pdf`, imagens explicitamente configuradas (JPG, PNG) e DOCX (`application/vnd.openxmlformats-officedocument.wordprocessingml.document`); rejeitar vazio, excesso de tamanho, arquivo protegido ou corrompido e metadata inválida.
+
+O tipo é detectado pelo conteúdo, nunca só pela extensão ou pelo MIME informado. Um DOCX é um zip que contém `[Content_Types].xml` (com o tipo principal de documento Word) e `word/document.xml`. Zip sem esses itens não é DOCX. XLSX, PPTX, `.docm`, `.dotx` e outros zips são rejeitados como tipo não suportado.
+
+Ordem das validações, por arquivo: vazio, tamanho, tipo pelo conteúdo, integridade e proteção.
+
+Erros de upload (o envelope de erro está em `PERSISTENCE_AND_API.md`):
+
+| Situação | HTTP | Código | Mensagem |
+|---|---|---|---|
+| Arquivo ausente ou vazio | 400 | `INVALID_FILE` | "Arquivo vazio: {nome}." |
+| Arquivo acima de `MAX_UPLOAD_MB` | 413 | `FILE_TOO_LARGE` | "Arquivo acima do limite: {nome}." |
+| DOCX que descompacta acima de 20 × o limite (zip bomb) | 413 | `FILE_TOO_LARGE` | "O conteúdo do arquivo {nome} excede o limite permitido." |
+| DOCX protegido por senha ou `.doc` legado | 422 | `DOCX_PROTECTED` | "O arquivo {nome} está protegido por senha ou está em formato antigo (.doc). Remova a proteção e envie novamente como .docx." |
+| DOCX corrompido | 422 | `DOCX_CORRUPTED` | "O arquivo {nome} está corrompido e não pôde ser aberto. Gere o DOCX novamente." |
+| PDF protegido por senha | 422 | `PDF_PROTECTED` | "O arquivo {nome} está protegido por senha. Remova a proteção e envie novamente." |
+| PDF corrompido | 422 | `PDF_CORRUPTED` | "O arquivo {nome} está corrompido e não pôde ser aberto. Gere o PDF novamente." |
+| Tipo não suportado (inclui XLSX, PPTX, `.docm`, `.dotx`, outros zips e arquivo renomeado) | 415 | `UNSUPPORTED_MEDIA_TYPE` | "Formato não aceito: {nome}. Use PDF, DOCX, JPG ou PNG." |
+| Qualquer falha no armazenamento | 503 | `STORAGE_UNAVAILABLE` (`retryable`) | "Não foi possível armazenar o arquivo. Tente novamente em instantes." |
+
+Como o backend decide entre "protegido", "corrompido" e "não suportado" quando o conteúdo não é DOCX:
+
+- Contêiner OLE (senha ou `.doc` legado): `DOCX_PROTECTED` se o nome termina em `.docx` ou `.doc`; senão, `UNSUPPORTED_MEDIA_TYPE`.
+- Zip com entrada cifrada: `DOCX_PROTECTED`.
+- Zip ilegível: `DOCX_CORRUPTED` se o nome termina em `.docx` ou `.doc`; senão, `UNSUPPORTED_MEDIA_TYPE`.
+- Zip com `[Content_Types].xml` mas sem `word/document.xml`: `DOCX_CORRUPTED` se o nome termina em `.docx` ou `.doc`; senão, `UNSUPPORTED_MEDIA_TYPE`.
+
+Se o armazenamento falhar em qualquer arquivo do lote, o backend apaga os originais já gravados, não cria a apólice e responde `503 STORAGE_UNAVAILABLE` com `details.retryable = true`. Não sobram arquivos órfãos.
+
+O upload é tudo ou nada: se um arquivo do lote for inválido, o backend recusa o lote inteiro e a mensagem cita o nome do arquivo. A interface usa esse nome para mostrar o erro junto do arquivo (SPEC-010).
+
+DOCX e PDF são lidos já no upload. Um DOCX que não abre gera `DOCX_CORRUPTED`. Falhas descobertas depois, no processamento, não mudam a resposta `202`: o documento fica `FAILED` com a mensagem do erro (SPEC-004).
 
 ### Critérios de aceite
 
 - Arquivo válido cria exatamente um documento e um objeto no Storage.
 - Resposta ocorre antes de chamadas de IA.
-- Falha no Storage não cria documento “processável”.
+- Falha no Storage (de qualquer arquivo do lote) responde `503 STORAGE_UNAVAILABLE`, apaga os originais já gravados e não cria a apólice nem documento “processável”.
 - Evento contém envelope completo e correlação.
 - Requisição repetida não duplica quando a mesma chave de idempotência for fornecida.
+- DOCX válido é aceito e criado como `Document`, com o tipo detectado pelo conteúdo.
+- Arquivo renomeado (por exemplo, `.txt` chamado `apolice.docx`) é rejeitado com `UNSUPPORTED_MEDIA_TYPE`.
+- DOCX corrompido é rejeitado com `422 DOCX_CORRUPTED`. DOCX protegido por senha ou `.doc` legado, com `422 DOCX_PROTECTED`.
+- PDF protegido por senha é rejeitado com `422 PDF_PROTECTED`. PDF corrompido, com `422 PDF_CORRUPTED`.
+- XLSX, PPTX, `.docm`, `.dotx` e outros zips são rejeitados com `415 UNSUPPORTED_MEDIA_TYPE`.
+- Zip que descompacta acima de 20 × `MAX_UPLOAD_MB` é rejeitado com `413 FILE_TOO_LARGE`.
+- Um arquivo inválido no lote recusa o lote inteiro, e a mensagem cita o nome do arquivo.
 
 ### Fora de escopo
 
@@ -61,17 +99,17 @@ Antivírus avançado, autenticação e parecer jurídico.
 
 ### Questões abertas
 
-Tamanho máximo, formatos de imagem e política de retenção: `PENDING_BUSINESS_VALIDATION`/configuração operacional.
+Tamanho máximo, formatos de imagem além de JPG e PNG e política de retenção: `PENDING_BUSINESS_VALIDATION`/configuração operacional.
 
 ### Testes futuros
 
-Unitários de validação; contrato multipart; integração com Storage fake; teste de publicação pós-persistência; teste de idempotência.
+Unitários de validação (incluindo falha de Storage no meio do lote sem originais órfãos, DOCX válido, corrompido, com senha, `.doc` legado, zip bomb, XLSX/PPTX e renomeado; PDF com senha e corrompido); contrato multipart; integração com Storage fake; teste de publicação pós-persistência; teste de idempotência.
 
 ## SPEC-002 — Armazenamento
 
 ### Objetivo e contexto
 
-Persistir original no Firebase Storage e metadados no Firestore com chave estável.
+Persistir o original (PDF, imagem ou DOCX) no armazenamento de arquivos e os metadados no Firestore com chave estável.
 
 ### Comportamento, entradas e saídas
 
@@ -83,7 +121,7 @@ Portas `BlobStorage`/`DocumentRepository`, adapters Firebase e transação/compe
 
 ### Regras e erros
 
-Calcular checksum; não expor URL pública por padrão; atualizar status de modo monotônico; sanitizar filename. Erros: `STORAGE_UNAVAILABLE`, `METADATA_WRITE_FAILED`, `CHECKSUM_FAILED`.
+Calcular checksum; não expor URL pública por padrão; atualizar status de modo monotônico; sanitizar filename. A extensão da chave (`pdf`, `png`, `jpg`, `docx`) vem do tipo detectado, não do nome enviado. O `content_type` gravado é o detectado. Erros: `STORAGE_UNAVAILABLE`, `METADATA_WRITE_FAILED`, `CHECKSUM_FAILED`.
 
 ### Critérios de aceite
 
@@ -91,6 +129,7 @@ Calcular checksum; não expor URL pública por padrão; atualizar status de modo
 - `storage_key` não depende de nome fornecido pelo usuário.
 - Falha após upload é registrada e recuperável.
 - Nenhum segredo aparece em metadados ou logs.
+- DOCX é guardado com `content_type` de DOCX e recuperado byte a byte igual ao enviado.
 
 ### Fora de escopo
 
@@ -98,7 +137,7 @@ Versionamento de arquivos pelo usuário e edição do original.
 
 ### Questões abertas
 
-Retenção, criptografia adicional e limite de páginas: `PENDING_BUSINESS_VALIDATION`.
+Retenção, criptografia adicional e limite de páginas (para DOCX, limite de blocos): `PENDING_BUSINESS_VALIDATION`.
 
 ### Testes futuros
 
@@ -120,7 +159,7 @@ Entrada: evento e documento armazenado. Saída: `DocumentProcessingStarted`, `Ex
 
 ### Regras e erros
 
-Transições válidas: `UPLOADED → PROCESSING → EXTRACTING → VALIDATING → COMPLETED/FAILED`; reexecução de evento já processado é no-op ou retorna estado atual. `max_attempts` finito.
+Transições válidas: `UPLOADED → PROCESSING → EXTRACTING → VALIDATING → COMPLETED/FAILED`. O caminho é o mesmo para PDF, imagem e DOCX; muda só o método de leitura na extração (SPEC-004). Reexecução de evento já processado é no-op ou retorna estado atual. `max_attempts` finito.
 
 ### Critérios de aceite
 
@@ -128,6 +167,7 @@ Transições válidas: `UPLOADED → PROCESSING → EXTRACTING → VALIDATING �
 - Documento inexistente gera falha clara, não exceção silenciosa.
 - Retry não cria jobs paralelos para o mesmo `processing_id`.
 - Estado final é consultável por endpoint de status.
+- DOCX percorre os mesmos estados de um PDF.
 
 ### Fora de escopo
 
@@ -145,7 +185,7 @@ Máquina de estados; duplicação de evento; crash simulado; limites de retry.
 
 ### Objetivo e contexto
 
-Extrair evidências de PDF ou imagem por leitura nativa e, quando necessário, OCR multimodal com Gemini, por meio do `AIOrchestrator` (documento 3, prompts 2 e 3).
+Extrair evidências de PDF, imagem ou DOCX. PDF com texto usa leitura nativa; PDF escaneado usa OCR multimodal com Gemini. Imagem usa OCR multimodal. DOCX usa somente leitura local do texto, nunca OCR. A IA é chamada por meio do `AIOrchestrator` (documento 3, prompts 2 e 3).
 
 ### Comportamento, entradas e saídas
 
@@ -157,17 +197,64 @@ Entrada: `document_id`, bytes/contexto, schema e `prompt_version`. Saída: `Extr
 
 ### Regras e erros
 
-Não inventar; preservar ausência, ambiguidade, conflitos, tabelas, numeração de cláusulas, valores, datas, limites, exclusões e condições precedentes. Usar leitura nativa quando houver camada de texto e OCR multimodal para PDF digitalizado ou imagem. OCR ilegível ou inconsistente gera evidência de baixa confiança, nunca texto completado. Resposta inválida não vira apólice. Timeout/429/5xx têm retry limitado. Erros: `INVALID_MODEL_OUTPUT`, `EXTRACTION_TIMEOUT`, `MODEL_UNAVAILABLE`, `SCHEMA_VALIDATION_FAILED`, `LOW_OCR_CONFIDENCE` (aviso, não falha).
+Não inventar; preservar ausência, ambiguidade, conflitos, tabelas, numeração de cláusulas, valores, datas, limites, exclusões e condições precedentes. Usar leitura nativa quando houver camada de texto e OCR multimodal para PDF digitalizado ou imagem. OCR ilegível ou inconsistente gera evidência de baixa confiança, nunca texto completado. Resposta inválida não vira apólice. Timeout/429/5xx têm retry limitado.
+
+**Faixas de páginas.** Texto nativo (PDF com texto e DOCX) é enviado ao modelo em faixas de `EXTRACTION_PAGES_PER_CALL` páginas (padrão 30, entre 1 e 200), para a resposta não estourar o limite de saída. O backend mescla os resultados: o primeiro valor preenchido de cada campo de identificação vence e as ocorrências são concatenadas. Ocorrências do mesmo conceito vindas de faixas diferentes são unidas depois, na consolidação da apólice. PDF escaneado e imagem vão em uma única chamada, com o arquivo inteiro.
+
+**DOCX.** O texto é lido localmente, sem OCR e sem enviar o arquivo ao modelo como imagem. Entram, na ordem em que aparecem no documento: parágrafos, títulos (`#`), listas (`-`), tabelas (uma linha por linha da tabela, com `[Coluna N]`), cabeçalhos e rodapés. O texto lido segue para a mesma extração e normalização do PDF. `extraction_method` da evidência é `NATIVE`, com confiança de leitura alta; a incerteza do modelo continua registrada.
+
+**Origem da evidência em DOCX.** DOCX não tem páginas fixas: a paginação depende do programa que abre o arquivo. O backend divide o texto em blocos lógicos numerados a partir de 1. Um bloco novo começa em:
+
+- quebra de página explícita (inclusive "quebra de página antes" do parágrafo);
+- quebra de seção que inicia nova página (seção contínua não quebra);
+- 3.500 caracteres acumulados no bloco.
+
+A divisão ocorre sempre entre parágrafos ou tabelas, então uma citação nunca fica cortada entre dois blocos. Quebras seguidas não criam bloco vazio. O resultado é determinístico: o mesmo arquivo gera sempre a mesma numeração. O número do bloco é gravado no campo `page` da evidência, e `pages` do documento é o total de blocos. Não existe campo `section_ref` no modelo atual. A interface deve chamar essa origem de "bloco" quando o documento for DOCX, e de "página" nos demais formatos.
+
+**Limitações conhecidas do DOCX.** Não são extraídos:
+
+- numeração automática de listas e de cláusulas do Word (definida em `numbering.xml`): só o texto do parágrafo é lido, sem o "1.2.3" gerado pelo Word. A evidência pode ficar sem número de cláusula ou com o número digitado no texto;
+- notas de rodapé;
+- caixas de texto.
+
+Quando a cláusula relevante depender desses elementos, a leitura pode omitir ou perder a referência, e o corretor deve conferir o original.
+
+**Erros.** Código, HTTP e mensagem seguem a tabela abaixo. Erros do provedor de IA e do processamento não mudam a resposta `202` do upload: o documento fica `FAILED` e a mensagem aparece em `failure`.
+
+| Código | HTTP | Quando | `retryable` |
+|---|---|---|---|
+| `DOCX_CORRUPTED` | 422 | DOCX não pôde ser lido | não |
+| `DOCX_WITHOUT_TEXT` | 422 | DOCX sem texto legível: "O arquivo {nome} não contém texto legível." | não |
+| `PDF_PROTECTED`, `PDF_CORRUPTED` | 422 | PDF descoberto protegido ou corrompido na leitura (SPEC-001) | não |
+| `AI_AUTH_FAILED` | 503 | chave da IA inválida ou sem permissão (HTTP 401 ou 403 do provedor, ou mensagem de chave inválida): "A chave de acesso da IA é inválida ou não tem permissão. Verifique a configuração do backend." | não |
+| `AI_MODEL_NOT_FOUND` | 503 | modelo configurado não existe (404 do provedor): "O modelo de IA configurado não foi encontrado. Verifique a configuração do backend." | não |
+| `AI_BAD_REQUEST` | 502 | provedor recusou a requisição (outros 4xx): "A IA recusou a requisição (dados em formato não aceito). Tente outro arquivo." | não |
+| `AI_OUTPUT_TRUNCATED` | 422 | resposta cortada por tamanho máximo: "A resposta da IA foi cortada por exceder o tamanho máximo. O documento é grande demais para uma única leitura; divida-o em partes menores." | não |
+| `MODEL_UNAVAILABLE` | 503 | timeout ou 5xx após `AI_MAX_ATTEMPTS` tentativas | sim |
+| `MODEL_RATE_LIMITED` | 503 | limite de uso (429) persistiu após as esperas | sim |
+| `INVALID_MODEL_OUTPUT` | 503 | resposta fora do JSON ou do schema após `AI_MAX_ATTEMPTS` tentativas | sim |
+
+O texto bruto de erro 4xx do provedor nunca é exposto: a mensagem é sempre a da tabela. Os códigos de IA levam `details.retryable` no envelope de erro. O documento guarda a mensagem em `failure`, o código em `failure_code` e o indicador em `failure_retryable`. O código vem do erro do worker (`exc.code`). Falha inesperada, fora dos erros classificados, grava `UNEXPECTED_ERROR` com `failure_retryable = true` e a mensagem "Falha inesperada ao processar o documento.". `EXTRACTION_TIMEOUT`, `SCHEMA_VALIDATION_FAILED` e `LOW_OCR_CONFIDENCE` (aviso, não falha) seguem como vocabulário reservado, sem uso no backend atual.
+
+**Cancelamento.** O processamento de cada apólice roda em uma task própria. Cancelar a apólice (`POST /policies/{id}/cancel`) interrompe essa task e não derruba o worker da fila, que segue atendendo os demais eventos. Só o encerramento do servidor cancela o worker.
 
 ### Critérios de aceite
 
 - Modelo é chamado apenas pela orquestração.
 - Resultado registra modelo, prompt, tokens, latência e tentativa.
-- Cada campo preenchido tem evidência (página, seção/cláusula quando houver, método e confiança) ou é rejeitado.
-- PDF pesquisável, PDF digitalizado e imagem são processados; todas as páginas são contabilizadas.
+- Cada campo preenchido tem evidência (origem, cláusula quando houver, método e confiança) ou é rejeitado. A origem é a página (PDF, imagem) ou o bloco lógico (DOCX), sempre no campo `page`.
+- PDF pesquisável, PDF digitalizado, imagem e DOCX são processados; todas as páginas (ou, no DOCX, todos os blocos) são contabilizadas.
+- Texto nativo com mais de `EXTRACTION_PAGES_PER_CALL` páginas é lido em várias chamadas e mesclado; PDF escaneado e imagem usam uma chamada.
+- Cancelar uma apólice em processamento não interrompe o worker da fila.
+- DOCX nunca aciona OCR. O texto de parágrafos, títulos, listas, tabelas, cabeçalhos e rodapés aparece nas evidências, na ordem do documento.
+- Duas leituras do mesmo DOCX geram os mesmos blocos e as mesmas origens de evidência.
+- Bloco novo começa em quebra de página explícita, quebra de seção que inicia página ou a cada 3.500 caracteres, sempre entre parágrafos.
+- Comparações PDF × PDF, DOCX × DOCX e PDF × DOCX funcionam com o mesmo resultado esperado para o mesmo conteúdo.
 - Evidência de baixa confiança aparece com `BROKER_GUIDANCE`.
 - Injection no PDF não altera instruções do sistema.
-- Ao exceder retries, status é `FAILED` com `retryable` correto.
+- Ao exceder retries, o documento fica `FAILED` e o erro leva `retryable` correto (`MODEL_UNAVAILABLE`, `MODEL_RATE_LIMITED` e `INVALID_MODEL_OUTPUT` são retryable; `AI_*` de configuração, não).
+- Resposta truncada gera `AI_OUTPUT_TRUNCATED`, sem retry.
+- Documento `FAILED` expõe `failure_code` e `failure_retryable` na API. Falha inesperada grava `UNEXPECTED_ERROR` com `failure_retryable = true`.
 
 ### Fora de escopo
 
@@ -175,11 +262,11 @@ Vínculo a conceitos (SPEC-015), pontuação (SPEC-016) e aconselhamento jurídi
 
 ### Questões abertas
 
-Limite de páginas/tokens e política de retenção do raw response.
+Limite de páginas/tokens (e de blocos no DOCX) e política de retenção do raw response. O limite de 3.500 caracteres por bloco é parâmetro técnico fixo do backend, sem validação de negócio.
 
 ### Testes futuros
 
-Mocks, golden datasets, respostas truncadas, conflitos, documentos extensos e injection.
+Mocks, golden datasets (incluindo o mesmo conteúdo em PDF e em DOCX), DOCX com tabela, cabeçalho, rodapé, quebra de página e de seção, bloco longo dividido, respostas truncadas, faixas de páginas, conflitos, documentos extensos e injection.
 
 ## SPEC-005 — Persistência da apólice
 
@@ -282,6 +369,7 @@ IDs distintos, existentes e `STORED`; a ordem A/B deve ser preservada, mas não 
 - API rejeita zero, uma ou mais de duas policies.
 - Policy falha não inicia comparação.
 - A e B permanecem identificáveis no resultado.
+- Na interface, a escolha é feita em dois slots grandes (A e B). Detalhes em SPEC-010.
 
 ### Fora de escopo
 
@@ -351,13 +439,22 @@ Entrada: resultado determinístico, ocorrências, evidências selecionadas e cri
 
 Usar apenas contexto fornecido; valores só das escalas fechadas; justificativa para valor ≠ 1,00; sem dupla redução pelo mesmo motivo; exclusão expressa zera o conceito; contratação só com documento contratual aplicável; citar `evidence_id`. Erros têm retry limitado.
 
+**Falha parcial.** A comparação termina em `PARTIAL` (e não em `FAILED`) em dois casos:
+
+- a avaliação por conceito falha (erro da IA depois dos retries): os conceitos que dependiam da IA ficam com 0 ponto, confiança baixa, evidência insuficiente e a justificativa "Avaliação por IA indisponível; pontuação não atribuída." Nada é inventado. Os fatos determinísticos, os scores e o resumo determinístico continuam. `failure.message` começa com "Avaliação por IA indisponível: ";
+- a redação da conclusão falha: vale o resumo determinístico e `failure.message` começa com "Resumo redigido sem IA: ". Se os dois falharem, prevalece a falha da avaliação.
+
+`failure` da comparação guarda `code`, `message` e `retryable`. `retryable` é verdadeiro para `MODEL_UNAVAILABLE`, `MODEL_RATE_LIMITED` e `INVALID_MODEL_OUTPUT`, e falso para `AI_AUTH_FAILED`, `AI_BAD_REQUEST`, `AI_MODEL_NOT_FOUND` e `AI_OUTPUT_TRUNCATED` (SPEC-004). Erro fora dessa lista durante a comparação vira `FAILED` com `UNEXPECTED_ERROR`.
+
 ### Critérios de aceite
 
 - IA não cria item factual fora da comparação nem calcula pontos.
 - Resultado com valor fora da escala ou sem justificativa é rejeitado.
 - Modelo/prompt/latência são registrados.
 - Conceito sem evidência suficiente fica `sufficient_evidence=false` e recebe `BROKER_GUIDANCE`.
-- Falha de avaliação preserva resultado determinístico e status `PARTIAL` explícito.
+- Falha da avaliação por conceito preserva o resultado determinístico e marca `PARTIAL`, com os conceitos que dependiam da IA em 0 ponto, confiança baixa e evidência insuficiente.
+- Falha só na redação do resumo também marca `PARTIAL`.
+- `failure.retryable` reflete o erro da IA.
 
 ### Fora de escopo
 
@@ -384,16 +481,108 @@ Menu fixo com cinco itens — barra inferior no celular, barra lateral a partir 
 | Item | Rota | Conteúdo |
 |---|---|---|
 | Início | `#/` | chamada principal, “Nova comparação”, “Adicionar apólice”, última comparação, como funciona e aviso ao corretor |
-| Apólices | `#/apolices`, `#/apolices/nova`, `#/apolices/{id}` | apólices com seus documentos agrupados, status de processamento, alertas, upload de vários arquivos com tipo de documento e evidências por conceito |
-| Comparar | `#/comparar`, `#/comparar/{id}` | seleção de Apólice 01/02 e perfil; resultado em abas Resumo, Conceitos, Perfis e Qualidade |
+| Apólices | `#/apolices`, `#/apolices/nova`, `#/apolices/{id}` | apólices com seus documentos agrupados, status de processamento, alertas, envio de vários arquivos (PDF, JPG, PNG, DOCX) com tipo de documento e evidências por conceito |
+| Comparar | `#/comparar`, `#/comparar/{id}` | escolha das duas apólices em dois slots (A e B), perfil em opções avançadas e resultado em ordem fixa |
 | Conceitos | `#/conceitos`, `#/conceitos/{id}` | pergunta em linguagem natural (SPEC-018), catálogo filtrável e onde cada conceito aparece |
 | Histórico | `#/historico` | comparações anteriores, tipo de resultado, scores e repetição das que falharam |
 
-Status de processamento usam azul ou neutro; laranja, vermelho, amarelo, verde e cinza ficam reservados aos resultados da comparação. Não há central de notificações no MVP.
+Selos de status de processamento usam só azul ou neutro, sempre com ícone e texto. Laranja, vermelho, amarelo, verde e cinza ficam reservados aos resultados da comparação (cores `--tone-*`, que não mudaram). Não há central de notificações no MVP.
+
+### Identidade visual
+
+Referência: aparência no nível do EasyPay, sem copiar marca. Vale para todas as telas.
+
+| Item | Regra |
+|---|---|
+| Fontes | IBM Plex Sans 500 e 600 (títulos e ênfases); Roboto 400 e 500 (texto e rótulos) |
+| Cores da marca | `#000000`, `#F9EFE5`, `#FFD700` |
+| Cores de base | `#7F8790`, `#8F92A1`, `#F8F8F8` |
+| Texto secundário | `#565D67`. O cinza `#7F8790` dá contraste de 3,2:1 sobre o creme `#F9EFE5` e fica só para decoração e ícones, nunca para texto |
+| Cores de notificação e de parecer | Não mudam. Seguem a base de conhecimento, seção 8 |
+| Amarelo da marca (`#FFD700`) | Só como acento (destaque, foco, detalhe). Nunca em selo de resultado |
+| Selos | Sempre com ícone e texto. Cor nunca é o único sinal |
+| Slots A e B | Preto e cinza, com a letra A ou B visível |
+| Navegação | Barra inferior no celular; barra lateral a partir de 1024 px |
+
+### Envio de documentos
+
+Configuração (variáveis `VITE_*`, lidas em `src/config/env.ts`):
+
+| Variável | Padrão | Uso |
+|---|---|---|
+| `VITE_UPLOAD_TIMEOUT_MS` | `300000` (5 min) | Tempo máximo do envio multipart. Ao estourar, o erro é `UPLOAD_TIMEOUT` |
+| `VITE_MAX_UPLOAD_MB` | `20` | Tamanho máximo por arquivo na validação local. Deve espelhar `MAX_UPLOAD_MB` do backend |
+
+Valor ausente, não numérico ou menor ou igual a zero volta ao padrão.
+
+- Cada arquivo é validado ao ser escolhido, antes do envio, por extensão (`.pdf`, `.docx`, `.jpg`, `.jpeg`, `.png`) e por MIME. MIME vazio é aceito pela extensão, porque é comum no Windows. MIME que não bate com a extensão é recusado. Arquivo vazio e arquivo acima do limite também são recusados.
+- O estado e o erro são por arquivo. O erro aparece em português, junto do arquivo com problema, e diz o que fazer (por exemplo: "O PDF está protegido por senha. Envie uma cópia sem senha."). O primeiro erro recebe o foco.
+- Um arquivo com erro local não impede os demais de seguirem: só os arquivos sem problema são enviados.
+- Erros do backend viram mensagens em português por código (`error.code`):
+
+| Código | Mensagem |
+|---|---|
+| `DOCX_CORRUPTED` | "O arquivo Word está corrompido e não pôde ser aberto. Gere o DOCX de novo e envie." |
+| `DOCX_PROTECTED` | "O arquivo Word está protegido por senha ou está em formato antigo (.doc). Remova a proteção e envie como .docx." |
+| `DOCX_WITHOUT_TEXT` | "O arquivo Word não tem texto legível. Envie uma versão com o conteúdo em texto." |
+| `PDF_PROTECTED` | "O PDF está protegido por senha. Envie uma cópia sem senha." |
+| `PDF_CORRUPTED` | "O PDF está corrompido e não pôde ser aberto. Gere o PDF de novo e envie." |
+| `UNSUPPORTED_MEDIA_TYPE` | "Formato não aceito. Envie PDF, DOCX, JPG ou PNG." |
+| `FILE_TOO_LARGE` | "O arquivo é maior que o limite permitido. Envie uma versão menor." |
+| `INVALID_FILE` | "O arquivo não pôde ser usado. Confira se ele não está vazio e envie novamente." |
+| `TOO_MANY_FILES` | "Há arquivos demais para uma apólice. Remova alguns e envie novamente." |
+| `NETWORK_ERROR` | "Não foi possível conectar à API. Verifique sua conexão com a internet e tente de novo." |
+| `REQUEST_TIMEOUT` | "O servidor demorou demais para responder. Tente novamente em instantes." |
+| `UPLOAD_TIMEOUT` | "O envio demorou mais que o esperado. Verifique sua conexão e tente enviar de novo." |
+
+Sem mapeamento, a tela mostra a mensagem que veio da API. `NETWORK_ERROR`, `REQUEST_TIMEOUT` e `UPLOAD_TIMEOUT` são os erros de rede, sem resposta do servidor.
+
+- O backend recusa o lote inteiro se um arquivo for inválido (SPEC-001). A interface associa o erro ao arquivo pelo nome citado na mensagem. Se nenhum nome for citado, o erro aparece no formulário.
+- O tipo do documento é detectado pelo nome do arquivo (só palavras inteiras) e é editável. A tela mostra "Detectamos: Apólice" com opção de trocar. Só apólice, especificação e endosso comprovam contratação.
+- Formatos aceitos aparecem antes da escolha: PDF, DOCX, JPG e PNG.
+
+### Processamento
+
+O usuário vê 3 passos, em linguagem simples:
+
+| Passo | Estado interno (SPEC-003) |
+|---|---|
+| Recebido | `UPLOADED` |
+| Lendo | `PROCESSING`, `EXTRACTING` |
+| Conferindo | `VALIDATING` |
+
+- A tela avisa que pode levar alguns minutos e que dá para sair e voltar. O status é consultado a cada 3 segundos até um estado final.
+- Falha de rede na consulta mostra "Sem conexão, tentando de novo…", mantém o que já foi enviado e segue consultando. Não há botão nesse caso.
+- Falha do documento mostra o motivo em português (a mensagem `failure` do documento) e a ação possível, sem detalhes técnicos. Só o documento que falhou tem o botão **Reenviar**, que volta à tela de envio. O botão **Reenviar documentos** aparece quando a apólice inteira falhou ou foi cancelada.
+- Apólice concluída mostra a tela de sucesso "Apólice pronta para comparar", com as ações Comparar com outra apólice, Ver detalhes da apólice, Adicionar outra apólice e Voltar para Apólices.
+
+### Escolha das apólices
+
+- Duas áreas grandes, os slots A e B, rotulados "Apólice 01" (A) e "Apólice 02" (B). Cada uma mostra a apólice escolhida ou convida a escolher.
+- Apólice em processamento, com falha ou cancelada aparece desabilitada, com o motivo escrito ("ainda sendo lida", "a leitura falhou", "leitura cancelada").
+- O botão **Comparar** fica indisponível enquanto faltar algo e diz o que falta ("Escolha a Apólice 02", "Escolha duas apólices diferentes").
+- Perfil de risco fica em **Opções avançadas**, recolhidas. O padrão é Base.
+
+### Ordem do resultado
+
+A ordem é fixa, de cima para baixo:
+
+1. Conclusão em uma frase.
+2. Dois placares, Aderência e Completude, cada um com uma linha de explicação.
+3. Vantagens e pontos de atenção de cada apólice.
+4. **Ver cálculo**, recolhido por padrão. Reúne os números do cálculo, a tabela por conceito, os perfis e o checklist de qualidade, em seções na mesma tela.
+
+O resultado não usa abas. Comparação `FAILED` mostra o motivo e o botão **Tentar de novo**, que cria uma nova comparação com as mesmas apólices e o mesmo perfil e abre o resultado dela. Se a criação falhar, o erro aparece junto do botão.
+
+A frase "Consulte seu corretor de seguros." fica sempre visível, em qualquer estado do resultado.
 
 ### Comportamento, entradas e saídas
 
-Entrada: response de comparison. UI exibe documentos processados, qualidade da extração, seletor de Apólice 01/02, filtro por nível de importância, seletor de perfil de risco, tabela com uma linha por conceito (colunas do prompt 15, incluindo peso, Resultado-base, Fator de Ajuste, pontos e parecer), Score de Aderência, Índice de Completude, indicador comparativo, resumo executivo, evidência literal com fonte/cláusula/página e alertas.
+Entrada: response de comparison. UI exibe a ordem fixa acima. Em "Ver cálculo": documentos processados, qualidade da extração, filtro por nível de importância, seletor de perfil de risco, tabela com uma linha por conceito (colunas do prompt 15, incluindo peso, Resultado-base, Fator de Ajuste, pontos e parecer), Score de Aderência, Índice de Completude, indicador comparativo, resumo executivo, evidência literal com fonte/cláusula e página (ou seção/bloco, em DOCX) e alertas.
+
+Em evidências de documento DOCX, a interface escreve "bloco" em vez de "página" (por exemplo, "bloco 3"). Nos demais formatos, continua "página" (abreviada "p. 3"). O rótulo vem do formato do documento (`file_kind`).
+
+O backend não expõe o tipo de arquivo nas evidências. Por isso, ao abrir uma comparação, a interface busca os dois `GET /policies/{id}` (apólices A e B), monta o mapa `document_id → file_kind` e usa a extensão `.docx` do nome do documento como fallback enquanto o mapa não chega ou quando falta o documento. Nas telas de detalhe da apólice e do conceito, só vale a extensão.
 
 ### Dependências
 
@@ -401,17 +590,29 @@ React, TypeScript, SCSS, API client e contratos de response.
 
 ### Regras e erros
 
-Não esconder `UNKNOWN`, `NOT_COMPARABLE`, `INCONCLUSIVE` ou `PENDING_BUSINESS_VALIDATION`; separar visualmente evidência, avaliação, pontuação e recomendação; usar as cores da base de conhecimento sempre acompanhadas de rótulo; não usar verde para mera menção em Condições Gerais; percentuais com uma casa decimal; exibir “Consulte seu corretor de seguros.” onde houver limitação; polling para em estados finais.
+Não esconder `UNKNOWN`, `NOT_COMPARABLE`, `INCONCLUSIVE` ou `PENDING_BUSINESS_VALIDATION`; separar visualmente evidência, avaliação, pontuação e recomendação; usar as cores da base de conhecimento sempre acompanhadas de rótulo e ícone; não usar verde para mera menção em Condições Gerais; percentuais com uma casa decimal; exibir “Consulte seu corretor de seguros.” onde houver limitação; polling para em estados finais.
 
 ### Critérios de aceite
 
-- Usuário sabe qual policy é A/B.
+- Usuário sabe qual policy é A/B (slots com a letra, em preto e cinza).
 - Itens têm conceito, peso, valores, pontos, parecer e evidência quando disponível.
 - Filtro por importância e troca de perfil não alteram os pesos-base exibidos.
 - Recomendação `CONDITIONED` é visualmente distinta de `TECHNICAL`.
 - Loading/erro/resultado parcial são estados explícitos.
 - Alvos de toque têm pelo menos 44 px e nenhuma tela rola na horizontal a partir de 320 px.
 - Layout é utilizável em viewport definido pelo MVP e tem acessibilidade básica.
+- Fontes e cores seguem a tabela de identidade visual; cores de notificação e de parecer ficam iguais às da base de conhecimento.
+- Nenhum selo de resultado usa o amarelo da marca; todo selo tem ícone e texto.
+- Menu é inferior no celular e lateral a partir de 1024 px.
+- Erro de envio aparece junto do arquivo, em português; o tipo do documento é editável.
+- O processamento mostra os 3 passos e o aviso de tempo. Falha de rede na consulta mostra "Sem conexão, tentando de novo…". **Reenviar** aparece só nos documentos que falharam.
+- Validação de envio por extensão e MIME (MIME vazio aceito pela extensão), com estado e erro por arquivo e mensagens em português por código de erro.
+- Fim do processamento mostra a tela de sucesso.
+- Comparação `FAILED` oferece **Tentar de novo**, que recria a comparação com as mesmas apólices e o mesmo perfil.
+- Evidência de DOCX diz "bloco"; as demais dizem "página".
+- Selo de status de processamento é azul ou neutro, com ícone e texto. Texto secundário usa `#565D67`.
+- Apólice em processamento está desabilitada nos slots, com motivo; **Comparar** indisponível diz o que falta.
+- Resultado segue a ordem fixa; "Ver cálculo" começa recolhido; "Consulte seu corretor de seguros." está sempre visível.
 
 ### Fora de escopo
 
@@ -419,11 +620,18 @@ Exportação PDF, dashboard analítico e edição de dados/pesos pelo usuário.
 
 ### Questões abertas
 
-Design visual, paginação da tabela e idioma final.
+Paginação da tabela e idioma final.
+
+**Limitações conhecidas.**
+
+- O upload é recusado inteiro se um arquivo do lote for inválido. O frontend associa o erro ao arquivo pelo nome citado na mensagem; se a mensagem não citar um nome, o erro fica no formulário.
+- O backend não expõe o tipo de arquivo nas evidências. O frontend faz dois `GET /policies/{id}` extras por comparação e usa a extensão `.docx` como fallback.
+- A leitura de DOCX não extrai numeração automática do Word, notas de rodapé nem caixas de texto (SPEC-004).
+- As apólices de exemplo de `Policy/` são menores que apólices reais (cerca de 12 páginas).
 
 ### Testes futuros
 
-Componentes, contrato com fixtures, acessibilidade e estados de erro.
+Componentes, contrato com fixtures, acessibilidade (contraste do texto sobre `#F9EFE5` e `#FFD700`), estados de erro e de rede e teclado nos slots. Já cobertos em `frontend/tests/`: validação de arquivo (`uploadFiles.test.ts`), envio e mapeamento de erros (`apiUpload.test.ts`, `newPolicy.test.tsx`), processamento e sucesso (`processing.test.tsx`), slots e bloqueio (`compare.test.tsx`) e resultado, "Tentar de novo" e rótulo "bloco" (`comparisonResult.test.tsx`).
 
 ## SPEC-011 — Tratamento de falhas
 
@@ -737,12 +945,14 @@ Repositories, `ScoringService`.
 
 ### Regras e erros
 
-Verificar: arquivos lidos, OCR e confiança, páginas processadas, classificação de documentos, página e cláusula nas evidências, todos os conceitos ponderados pesquisados, mesmos critérios nas duas apólices, contratação separada de presença, ausência separada de exclusão, pesos preservados, cálculos corretos, limites e prazos em bases equivalentes, completude calculada, críticos inconclusivos destacados, recomendação compatível com evidências e orientação ao usuário. Verificação negativa gera correção ou limitação explícita com `BROKER_GUIDANCE`.
+Verificar: arquivos lidos, OCR e confiança (não se aplica a DOCX, que nunca usa OCR), páginas processadas (só DOCX: "blocos"; apólices mistas: "páginas e blocos"), classificação de documentos, página e cláusula nas evidências, todos os conceitos ponderados pesquisados, mesmos critérios nas duas apólices, contratação separada de presença, ausência separada de exclusão, pesos preservados, cálculos corretos, limites e prazos em bases equivalentes, completude calculada, críticos inconclusivos destacados, recomendação compatível com evidências e orientação ao usuário. Verificação negativa gera correção ou limitação explícita com `BROKER_GUIDANCE`.
 
 ### Critérios de aceite
 
 - Resultado nunca é exibido como completo com verificação negativa oculta.
-- O checklist aparece na API e pode ser mostrado na UI.
+- O checklist aparece na API e pode ser mostrado na UI, dentro de "Ver cálculo".
+- Para DOCX, a verificação de OCR é marcada como não aplicável, não como falha.
+- O texto do checklist usa "blocos" quando todos os documentos são DOCX e "páginas e blocos" quando há PDF e DOCX (por exemplo, "4 páginas e 4 blocos (DOCX)."). A verificação de evidências diz "bloco" (só DOCX), "página" ou "página ou bloco" (misto).
 
 ### Fora de escopo
 

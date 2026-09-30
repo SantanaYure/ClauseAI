@@ -43,6 +43,8 @@ class PolicyDocumentResponse(Dto):
     extraction_quality: Level | None
     ocr_required: bool
     failure: str | None
+    failure_code: str | None = None
+    failure_retryable: bool = False
 
     @classmethod
     def of(cls, document: PolicyDocument) -> "PolicyDocumentResponse":
@@ -56,6 +58,8 @@ class PolicyDocumentResponse(Dto):
             extraction_quality=document.extraction_quality,
             ocr_required=document.ocr_required,
             failure=document.failure,
+            failure_code=document.failure_code,
+            failure_retryable=document.failure_retryable,
         )
 
 
@@ -126,6 +130,8 @@ class ComparisonListItemResponse(Dto):
     adherence_b: float | None
     decision_mode: DecisionMode | None
     failure_reason: str | None
+    failure_code: str | None = None
+    failure_retryable: bool = False
 
     @classmethod
     def of(cls, comparison: Comparison) -> "ComparisonListItemResponse":
@@ -140,6 +146,8 @@ class ComparisonListItemResponse(Dto):
             adherence_b=base.b.adherence if base else None,
             decision_mode=comparison.summary.decision_mode if comparison.summary else None,
             failure_reason=comparison.failure.message if comparison.failure else None,
+            failure_code=comparison.failure.code if comparison.failure else None,
+            failure_retryable=comparison.failure.retryable if comparison.failure else False,
         )
 
 

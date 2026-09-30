@@ -32,9 +32,11 @@ from app.infrastructure.ai.support import (
     parse_json_object,
     render,
 )
+from app.shared.exceptions import ApplicationError
 
 PROMPT_VERSION = "P-EXTRACT-001"
 MAX_CATALOG_VARIANTS = 6
+_NATIVE_KINDS = {FileKind.SEARCHABLE_PDF, FileKind.DOCX}
 
 
 class _EvidenceOut(BaseModel):
@@ -83,16 +85,51 @@ def _catalog_text(knowledge_base: KnowledgeBase) -> str:
     return "\n".join(lines)
 
 
-def _native_text(page_texts: dict[int, str]) -> str:
+_DOCX_NOTE = (
+    "Documento Word sem páginas fixas: cada page é um bloco lógico delimitado por quebras "
+    "de página, de seção ou por tamanho. Use o número do bloco como page."
+)
+
+
+def _native_text(page_texts: dict[int, str], file_kind: FileKind) -> str:
     pages = [
         f'<page number="{page}">\n{text}\n</page>' for page, text in sorted(page_texts.items())
     ]
-    return "<document>\n" + "\n".join(pages) + "\n</document>"
+    note = f' format="docx" note="{_DOCX_NOTE}"' if file_kind == FileKind.DOCX else ""
+    return f"<document{note}>\n" + "\n".join(pages) + "\n</document>"
+
+
+DEFAULT_PAGES_PER_CALL = 30
+
+
+def _page_windows(page_texts: dict[int, str], size: int) -> list[dict[int, str]]:
+    """Consecutive page ranges, so a long document never overflows the output limit."""
+
+    pages = sorted(page_texts)
+    return [{p: page_texts[p] for p in pages[i : i + size]} for i in range(0, len(pages), size)]
+
+
+def _merge_outputs(outputs: list[_ExtractionOut]) -> _ExtractionOut:
+    """Join range results: first non-empty intake field wins; occurrences concatenate.
+
+    Same-concept occurrences from different ranges are merged later, at policy level.
+    """
+
+    intake = outputs[0].intake
+    for other in outputs[1:]:
+        fill = {
+            name: getattr(other.intake, name)
+            for name in _INTAKE_FIELDS
+            if getattr(intake, name) is None and getattr(other.intake, name) is not None
+        }
+        intake = intake.model_copy(update=fill)
+    return _ExtractionOut(intake=intake, occurrences=[o for x in outputs for o in x.occurrences])
 
 
 class GeminiPolicyExtractor:
-    def __init__(self, client: GeminiClient) -> None:
+    def __init__(self, client: GeminiClient, pages_per_call: int = DEFAULT_PAGES_PER_CALL) -> None:
         self._client = client
+        self._pages_per_call = pages_per_call
         self._template = load_prompt(PROMPT_VERSION)
 
     @property
@@ -103,13 +140,17 @@ class GeminiPolicyExtractor:
         self, content: DocumentContent, knowledge_base: KnowledgeBase
     ) -> ExtractionResult:
         document = content.document
-        native = document.file_kind == FileKind.SEARCHABLE_PDF and bool(content.page_texts)
+        native = document.file_kind in _NATIVE_KINDS and bool(content.page_texts)
+        if document.file_kind == FileKind.DOCX and not native:
+            raise ApplicationError(
+                "O texto do DOCX não foi lido.", code="DOCX_WITHOUT_TEXT", status_code=422
+            )
         instructions = render(self._template, catalog=_catalog_text(knowledge_base))
-        parts: list[Any] = [instructions]
         if native:
-            parts.append(_native_text(content.page_texts))
+            windows = _page_windows(content.page_texts, self._pages_per_call)
+            documents: list[Any] = [_native_text(w, document.file_kind) for w in windows]
         else:
-            parts.append(types.Part.from_bytes(data=content.data, mime_type=document.content_type))
+            documents = [types.Part.from_bytes(data=content.data, mime_type=document.content_type)]
 
         def parse(text: str | None) -> _ExtractionOut:
             try:
@@ -117,7 +158,11 @@ class GeminiPolicyExtractor:
             except PydanticValidationError as exc:
                 raise InvalidModelOutput(str(exc)) from exc
 
-        output = await self._client.generate(parts, PROMPT_VERSION, parse)
+        outputs = [
+            await self._client.generate([instructions, part], PROMPT_VERSION, parse)
+            for part in documents
+        ]
+        output = _merge_outputs(outputs)
         return self._to_domain(output, content, knowledge_base, native)
 
     def _to_domain(

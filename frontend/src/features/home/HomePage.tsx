@@ -2,6 +2,7 @@ import { paths } from '../../app/router';
 import { Badge } from '../../components/Badge';
 import { BrokerNotice } from '../../components/BrokerNotice';
 import { Icon, type IconName } from '../../components/Icon';
+import { Illustration } from '../../components/Illustration';
 import { clauseApi } from '../../services/api/clause-api';
 import { formatDateTime } from '../../shared/format';
 import { DECISION_MODE_LABELS } from '../../shared/labels';
@@ -12,17 +13,17 @@ const STEPS: { icon: IconName; title: string; text: string }[] = [
   {
     icon: 'upload',
     title: 'Enviar documentos',
-    text: 'Apólice, condições gerais e especificação em PDF ou imagem.',
+    text: 'Apólice, condições gerais e especificação em PDF, DOCX, JPG ou PNG.',
   },
   {
     icon: 'file',
     title: 'Extrair informações',
-    text: 'Leitura do PDF e OCR identificam cláusulas e coberturas.',
+    text: 'Leitura do texto (e OCR, quando preciso) identifica cláusulas e coberturas.',
   },
   {
     icon: 'search',
     title: 'Revisar evidências',
-    text: 'Cada informação mostra o trecho, a cláusula e a página.',
+    text: 'Cada informação mostra o trecho, a cláusula e a página (ou bloco, em DOCX).',
   },
   {
     icon: 'chart',
@@ -91,6 +92,7 @@ export function HomePage() {
   return (
     <div className="page page--home">
       <section className="hero">
+        <Illustration name="welcome" className="hero__art" />
         <h1 className="hero__title">Compare apólices D&amp;O com clareza</h1>
         <p className="hero__subtitle">
           Envie os documentos, confira as evidências e veja as diferenças com pontuação explicável.
@@ -100,7 +102,7 @@ export function HomePage() {
             <Icon name="plus" size={20} />
             Nova comparação
           </a>
-          <a className="btn btn--secondary btn--block" href={paths.newPolicy}>
+          <a className="btn btn--ghost btn--block" href={paths.newPolicy}>
             <Icon name="upload" size={20} />
             Adicionar apólice
           </a>
@@ -109,10 +111,8 @@ export function HomePage() {
 
       <LatestComparison />
 
-      <section aria-labelledby="how-title">
-        <h2 id="how-title" className="section-title">
-          Como funciona
-        </h2>
+      <details className="fold">
+        <summary>Como funciona</summary>
         <ol className="steps">
           {STEPS.map((step, index) => (
             <li key={step.title} className="steps__item">
@@ -127,12 +127,10 @@ export function HomePage() {
             </li>
           ))}
         </ol>
-      </section>
+      </details>
 
-      <section aria-labelledby="principles-title">
-        <h2 id="principles-title" className="section-title">
-          Como o ClauseAI decide
-        </h2>
+      <details className="fold">
+        <summary>Como o ClauseAI decide</summary>
         <ul className="principles">
           {PRINCIPLES.map((principle) => (
             <li key={principle.title} className="principles__item">
@@ -144,7 +142,7 @@ export function HomePage() {
             </li>
           ))}
         </ul>
-      </section>
+      </details>
 
       <BrokerNotice reason="A análise depende dos documentos enviados e não é aconselhamento jurídico. Em caso de dúvida:" />
     </div>

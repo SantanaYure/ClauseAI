@@ -4,7 +4,7 @@ Plataforma inteligente para análise e comparação de apólices D&O, desenvolvi
 
 ## Descrição do projeto
 
-O ClauseAI recebe apólices D&O em PDF ou imagem, extrai o conteúdo por leitura nativa ou OCR com IA generativa, normaliza cláusulas e coberturas contra um dicionário D&O, armazena as evidências de forma estruturada e compara duas apólices conceito a conceito. A comparação aplica pesos técnicos, calcula Score de Aderência e Índice de Completude, avalia perfis de risco e apresenta um resumo executivo condicionado, sempre com o trecho literal, a cláusula e a página de origem. Quando a informação é ambígua, incompleta ou não comprovada, o sistema orienta: “Consulte seu corretor de seguros.”
+O ClauseAI recebe apólices D&O em PDF, imagem (JPG, PNG) ou DOCX, extrai o conteúdo por leitura nativa (PDF e DOCX) ou OCR com IA generativa (imagem e PDF digitalizado), normaliza cláusulas e coberturas contra um dicionário D&O, armazena as evidências de forma estruturada e compara duas apólices conceito a conceito. A comparação aceita PDF × PDF, DOCX × DOCX e PDF × DOCX. Ela aplica pesos técnicos, calcula Score de Aderência e Índice de Completude, avalia perfis de risco e apresenta um resumo executivo condicionado, sempre com o trecho literal, a cláusula e a página de origem. Quando a informação é ambígua, incompleta ou não comprovada, o sistema orienta: “Consulte seu corretor de seguros.”
 
 As regras de negócio estão em [`docs/domain/DO_KNOWLEDGE_BASE.md`](docs/domain/DO_KNOWLEDGE_BASE.md) e a documentação técnica em [`docs/`](docs/README.md).
 
@@ -33,6 +33,7 @@ ClauseAI/
 ├── backend/
 ├── frontend/
 ├── docs/
+├── Policy/                 # apólices D&O fictícias de exemplo (PDF e DOCX)
 ├── Projeto_Final_Artefatos/
 ├── .editorconfig
 ├── .gitignore
@@ -98,15 +99,17 @@ npm run build
 
 ## Configuração
 
-Nunca use credenciais reais no repositório: o `.env` é ignorado pelo Git. Preencha `backend/.env` (chave do Gemini e credenciais do Firebase; veja a tabela em [`backend/README.md`](backend/README.md)) e, se necessário, `frontend/.env`. Sem as variáveis obrigatórias o backend não sobe e lista o que falta.
+Nunca use credenciais reais no repositório: o `.env` é ignorado pelo Git. Preencha `backend/.env` (chave do Gemini e credenciais do Firebase; veja a tabela em [`backend/README.md`](backend/README.md)) e, se necessário, `frontend/.env`. Sem as variáveis obrigatórias o backend não sobe e lista o que falta. Para rodar sem credenciais, use `AI_PROVIDER=local`, `PERSISTENCE_BACKEND=memory` e `STORAGE_BACKEND=local` (veja [`docs/development/getting-started.md`](docs/development/getting-started.md)).
 
 ## Escopo atual
 
 Implementado:
 
 - **Frontend:** cinco telas navegáveis e mobile first (Início, Apólices, Comparar, Conceitos, Histórico), ligadas à API.
-- **Backend:** upload de apólices com vários documentos, processamento assíncrono, extração com Gemini (texto nativo ou OCR multimodal), normalização pelo catálogo D&O, comparação com avaliação por conceito pelo Gemini, pontuação ponderada, perfis de risco, resumo executivo, checklist de qualidade e consulta por conceito.
+- **Backend:** upload de apólices com vários documentos, processamento assíncrono, extração com Gemini (texto nativo de PDF e DOCX ou OCR multimodal de imagem e PDF digitalizado), normalização pelo catálogo D&O, comparação com avaliação por conceito pelo Gemini, pontuação ponderada, perfis de risco, resumo executivo, checklist de qualidade e consulta por conceito.
 - Persistência em Firestore e arquivos em pasta local (Firebase Storage opcional), logs estruturados com correlação e testes automatizados.
+
+- **Apólices de exemplo:** 5 apólices D&O fictícias, sem valor contratual, em `Policy/` (PDF e DOCX), geradas por `backend/scripts/generate_sample_policies.py`. Servem para testar a comparação. Veja [`docs/development/getting-started.md`](docs/development/getting-started.md).
 
 Não implementado: autenticação, fila durável e endpoints `/documents` isolados. A sequência está em [`docs/ROADMAP.md`](docs/ROADMAP.md).
 

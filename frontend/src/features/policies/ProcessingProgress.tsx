@@ -1,23 +1,28 @@
 import { paths } from '../../app/router';
-import { Badge } from '../../components/Badge';
 import { BrokerNotice } from '../../components/BrokerNotice';
 import { Icon } from '../../components/Icon';
+import { Illustration } from '../../components/Illustration';
+import { ProcessSteps } from '../../components/ProcessSteps';
 import { Spinner } from '../../components/Spinner';
 import { ErrorState, LoadingState } from '../../components/StateViews';
 import { clauseApi } from '../../services/api/clause-api';
-import { DOCUMENT_STATUS_LABELS, DOCUMENT_TYPE_LABELS } from '../../shared/labels';
-import { describeProcessing, isDocumentBusy } from '../../shared/processing';
-import { documentStatusTone } from '../../shared/tones';
+import { policyStepIndex } from '../../shared/processing';
 import { useApiData } from '../../shared/useApiData';
-import type { DocumentStatus } from '../../types/domain';
+import type { PolicySummary } from '../../types/domain';
 import { CancelExtractionButton } from './CancelExtractionButton';
-
-const STEPS: DocumentStatus[] = ['UPLOADED', 'PROCESSING', 'EXTRACTING', 'VALIDATING', 'COMPLETED'];
+import { PolicyReadyScreen } from './PolicyReadyScreen';
+import { ProcessingDocumentRow } from './ProcessingDocumentRow';
 
 const POLL_MS = 3000;
 
 /** Acompanha o processamento assíncrono (SPEC-003): consulta o status até um estado final. */
-export function ProcessingProgress({ policyId }: { policyId: string }) {
+type ProcessingProgressProps = {
+  policyId: string;
+  /** Volta à tela de envio para mandar de novo ou adicionar outra apólice. */
+  onRestart: () => void;
+};
+
+export function ProcessingProgress({ policyId, onRestart }: ProcessingProgressProps) {
   const state = useApiData(`policy:${policyId}`, () => clauseApi.getPolicy(policyId), {
     pollMs: POLL_MS,
     shouldPoll: (policy) => policy.status === 'PROCESSING',
@@ -28,96 +33,81 @@ export function ProcessingProgress({ policyId }: { policyId: string }) {
     return <ErrorState message={state.message} onRetry={state.reload} />;
 
   const policy = state.data;
-  const done = policy.status !== 'PROCESSING';
-  const cancelled = policy.status === 'CANCELLED';
+  if (policy.status === 'READY' || policy.status === 'ATTENTION') {
+    return <PolicyReadyScreen policy={policy} onRestart={onRestart} />;
+  }
+  if (policy.status === 'PROCESSING') {
+    return <InProgress policy={policy} offline={state.refreshFailed} onCancelled={state.reload} />;
+  }
+  return <Stopped policy={policy} onRestart={onRestart} />;
+}
 
+type InProgressProps = {
+  policy: PolicySummary;
+  offline: boolean;
+  onCancelled: () => void;
+};
+
+function InProgress({ policy, offline, onCancelled }: InProgressProps) {
   return (
     <div className="stack">
-      <p className="processing-note processing-note--block" role="status" aria-live="polite">
-        {done ? (
-          cancelled ? (
-            <>
-              <Icon name="alert" size={20} />
-              <span>
-                <strong>Processamento cancelado.</strong>
-                A extração foi interrompida pelo usuário.
-              </span>
-            </>
+      <Illustration name="search" className="processing-art" />
+      <ProcessSteps current={policyStepIndex(policy.documents)} />
+      <div className="processing-note processing-note--block" role="status" aria-live="polite">
+        {offline ? <Icon name="alert" size={20} /> : <Spinner />}
+        <span>
+          {offline ? (
+            <strong>Sem conexão, tentando de novo…</strong>
           ) : (
-            <>
-              <Icon name="checkCircle" size={20} />
-              <span>
-                <strong>Processamento concluído.</strong>
-              </span>
-            </>
-          )
-        ) : (
-          <>
-            <Spinner />
-            <span>
-              <strong>{describeProcessing(policy.documents)}</strong>
-              Você pode sair desta tela: o processamento continua e o status aparece em Apólices.
-            </span>
-          </>
-        )}
-      </p>
-
-      {!done && (
-        <CancelExtractionButton
-          policyId={policy.id}
-          policyName={policy.name}
-          variant="block"
-          onCancelled={state.reload}
-        />
-      )}
-
-      <ul className="stack">
-        {policy.documents.map((document) => {
-          const current = STEPS.indexOf(document.status);
-          return (
-            <li key={document.id} className="card">
-              <div className="doc-card__header">
-                <Icon name="file" size={20} />
-                <strong className="doc-card__name">
-                  {document.filename}
-                  <small>{DOCUMENT_TYPE_LABELS[document.type]}</small>
-                </strong>
-                <Badge
-                  tone={documentStatusTone(document.status)}
-                  busy={isDocumentBusy(document.status)}
-                >
-                  {DOCUMENT_STATUS_LABELS[document.status]}
-                </Badge>
-              </div>
-              <ol className="progress-steps" aria-label={`Etapas de ${document.filename}`}>
-                {STEPS.map((step, index) => (
-                  <li
-                    key={step}
-                    className={`progress-steps__item${index <= current ? ' progress-steps__item--done' : ''}`}
-                    aria-current={index === current ? 'step' : undefined}
-                  >
-                    {DOCUMENT_STATUS_LABELS[step]}
-                  </li>
-                ))}
-              </ol>
-            </li>
-          );
-        })}
+            <strong>Estamos lendo sua apólice. Isso pode levar alguns minutos.</strong>
+          )}
+          Você pode sair desta tela: o processamento continua e o status aparece em Apólices.
+        </span>
+      </div>
+      <CancelExtractionButton
+        policyId={policy.id}
+        policyName={policy.name}
+        variant="block"
+        onCancelled={onCancelled}
+      />
+      <ul className="stack" aria-label="Documentos enviados">
+        {policy.documents.map((document) => (
+          <ProcessingDocumentRow key={document.id} document={document} />
+        ))}
       </ul>
+    </div>
+  );
+}
 
-      {done && (
-        <>
-          {policy.alerts.map((alert) => (
-            <BrokerNotice key={alert} reason={alert} />
-          ))}
-          <a className="btn btn--primary btn--block" href={paths.policy(policy.id)}>
-            Ver detalhes da apólice
-          </a>
-          <a className="btn btn--secondary btn--block" href={paths.policies}>
-            Voltar para Apólices
-          </a>
-        </>
-      )}
+function Stopped({ policy, onRestart }: { policy: PolicySummary; onRestart: () => void }) {
+  const cancelled = policy.status === 'CANCELLED';
+  return (
+    <div className="stack">
+      <Illustration name="search" className="processing-art" />
+      <p className="processing-note processing-note--block" role="status" aria-live="polite">
+        <Icon name="alert" size={20} />
+        <span>
+          <strong>{cancelled ? 'Processamento cancelado.' : 'Não foi possível processar.'}</strong>
+          {cancelled
+            ? 'A extração foi interrompida pelo usuário.'
+            : 'Veja abaixo o motivo de cada documento.'}
+        </span>
+      </p>
+      <ul className="stack" aria-label="Documentos enviados">
+        {policy.documents.map((document) => (
+          <ProcessingDocumentRow key={document.id} document={document} onResend={onRestart} />
+        ))}
+      </ul>
+      {policy.alerts.map((alert) => (
+        <BrokerNotice key={alert} reason={alert} />
+      ))}
+      <button type="button" className="btn btn--primary btn--block" onClick={onRestart}>
+        <Icon name="upload" size={20} />
+        Reenviar documentos
+      </button>
+      <a className="btn btn--secondary btn--block" href={paths.policies}>
+        Voltar para Apólices
+      </a>
     </div>
   );
 }

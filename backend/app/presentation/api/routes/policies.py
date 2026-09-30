@@ -32,7 +32,7 @@ async def create_policy(
     services: Services,
     correlation: Correlation,
     settings: Annotated[Settings, Depends(get_settings)],
-    files: Annotated[list[UploadFile], File(description="PDF, JPG ou PNG")],
+    files: Annotated[list[UploadFile], File(description="PDF, DOCX, JPG ou PNG")],
     document_types: Annotated[list[DocumentType], Form()],
     insurer: Annotated[str | None, Form(max_length=120)] = None,
     name: Annotated[str | None, Form(max_length=120)] = None,
@@ -91,4 +91,3 @@ async def delete_policy(policy_id: str, services: Services) -> None:
 @router.get("/{policy_id}", response_model=PolicyDetailResponse)
 async def get_policy(policy_id: str, services: Services) -> PolicyDetailResponse:
     return PolicyDetailResponse.of(await services.policies.get_policy(policy_id))
-

@@ -1,22 +1,22 @@
 import { Badge } from '../../components/Badge';
-import { BrokerNotice } from '../../components/BrokerNotice';
 import { Icon } from '../../components/Icon';
-import { ScoreBar } from '../../components/ScoreBar';
-import { formatPercent, formatPercentagePoints, formatPoints } from '../../shared/format';
+import { Illustration } from '../../components/Illustration';
 import { DECISION_MODE_LABELS, POLICY_SLOT_LABELS } from '../../shared/labels';
-import type { ComparisonPolicyRef, ComparisonResult, ScoreSummary } from '../../types/domain';
+import type { ComparisonResult } from '../../types/domain';
+import { Scoreboard } from './Scoreboard';
 
-type SummaryPanelProps = {
-  comparison: ComparisonResult;
-};
-
-/** Resumo executivo (SPEC-017), sempre separado da análise documental por conceito. */
-export function SummaryPanel({ comparison }: SummaryPanelProps) {
+/**
+ * Resumo executivo (SPEC-010/017) na ordem fixa: conclusão, dois placares, vantagens e atenção.
+ * O cálculo detalhado fica em "Ver cálculo".
+ */
+export function SummaryPanel({ comparison }: { comparison: ComparisonResult }) {
   const base = comparison.profiles.find((profile) => profile.profile === 'BASE');
   const { summary } = comparison;
   if (!summary || !base) {
     return (
-      <BrokerNotice reason="O resumo executivo não foi gerado nesta comparação; consulte as abas Conceitos e Qualidade." />
+      <p className="callout">
+        O resumo executivo não foi gerado nesta comparação; consulte “Ver cálculo”.
+      </p>
     );
   }
   const conditioned = summary.decisionMode === 'CONDITIONED';
@@ -29,7 +29,7 @@ export function SummaryPanel({ comparison }: SummaryPanelProps) {
       >
         <div className="decision__header">
           <h2 id="decision-title" className="section-title">
-            Resumo executivo
+            Conclusão
           </h2>
           <Badge
             tone={conditioned ? 'medium' : 'success'}
@@ -38,142 +38,71 @@ export function SummaryPanel({ comparison }: SummaryPanelProps) {
             {DECISION_MODE_LABELS[summary.decisionMode]}
           </Badge>
         </div>
-        <p>{summary.conclusion}</p>
-        {conditioned && <BrokerNotice compact />}
+        <p className="decision__conclusion">{summary.conclusion}</p>
+        {!conditioned && <Illustration name="success" />}
       </section>
 
       <div className="score-grid">
-        <ScoreCard
+        <Scoreboard
           slot="A"
           policy={comparison.policyA}
           score={base.a}
           leader={base.winner === 'A'}
         />
-        <ScoreCard
+        <Scoreboard
           slot="B"
           policy={comparison.policyB}
           score={base.b}
           leader={base.winner === 'B'}
         />
       </div>
-      <p className="muted-text center">
-        Diferença entre os scores de aderência:{' '}
-        {formatPercentagePoints(Math.abs(base.a.adherence - base.b.adherence))}
-      </p>
-
-      {summary.scoreVsQualitative && (
-        <section className="callout" aria-labelledby="divergence-title">
-          <h3 id="divergence-title">
-            <Icon name="info" size={18} /> Score × análise qualitativa
-          </h3>
-          <p>{summary.scoreVsQualitative}</p>
-        </section>
-      )}
 
       <div className="two-columns">
-        <SummaryList
-          title={`Vantagens da ${POLICY_SLOT_LABELS.A}`}
-          items={summary.advantagesA}
-          empty="Nenhuma vantagem comprovada."
-        />
-        <SummaryList
-          title={`Vantagens da ${POLICY_SLOT_LABELS.B}`}
-          items={summary.advantagesB}
-          empty="Nenhuma vantagem comprovada."
-        />
+        <section className="card summary-list" aria-labelledby="advantages-title">
+          <h3 id="advantages-title" className="summary-list__title">
+            Vantagens
+          </h3>
+          <AdvantageList label={POLICY_SLOT_LABELS.A} items={summary.advantagesA} />
+          <AdvantageList label={POLICY_SLOT_LABELS.B} items={summary.advantagesB} />
+        </section>
+        <section
+          className="card summary-list summary-list--attention"
+          aria-labelledby="attention-title"
+        >
+          <h3 id="attention-title" className="summary-list__title">
+            <Icon name="alert" size={18} /> Atenção
+          </h3>
+          {summary.attentionPoints.length ? (
+            <ul>
+              {summary.attentionPoints.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+          ) : (
+            <p className="muted-text">Nenhum ponto de atenção.</p>
+          )}
+          {summary.scoreVsQualitative && (
+            <p className="summary-list__note">{summary.scoreVsQualitative}</p>
+          )}
+        </section>
       </div>
-      <SummaryList
-        title="Coberturas críticas equivalentes"
-        items={summary.equivalentCritical}
-        empty="Nenhuma."
-      />
-      <SummaryList
-        title="Diferenças de maior impacto"
-        items={summary.highestImpact}
-        empty="Nenhuma diferença de pontuação."
-        ordered
-      />
-      <SummaryList
-        title="Pontos de atenção"
-        items={summary.attentionPoints}
-        empty="Nenhum ponto de atenção."
-        tone="attention"
-      />
-
-      <p className="footnote">
-        Pesos indicam importância para a decisão; não comprovam contratação. A análise documental
-        completa está em “Conceitos”.
-      </p>
     </div>
   );
 }
 
-type ScoreCardProps = {
-  slot: 'A' | 'B';
-  policy: ComparisonPolicyRef;
-  score: ScoreSummary;
-  leader: boolean;
-};
-
-function ScoreCard({ slot, policy, score, leader }: ScoreCardProps) {
+function AdvantageList({ label, items }: { label: string; items: string[] }) {
   return (
-    <section
-      className={`card score-card score-card--${slot.toLowerCase()}`}
-      aria-label={`Scores da ${POLICY_SLOT_LABELS[slot]}`}
-    >
-      <p className="score-card__slot">
-        {POLICY_SLOT_LABELS[slot]}
-        {leader && <Badge tone="neutral">Maior score</Badge>}
-      </p>
-      <p className="score-card__insurer">{policy.insurer}</p>
-      <ScoreBar label="Score de aderência" value={score.adherence} />
-      <ScoreBar label="Índice de completude" value={score.completeness} variant="secondary" />
-      <dl className="score-card__facts">
-        <div>
-          <dt>Pontos</dt>
-          <dd>
-            {formatPoints(score.raw)} de {formatPoints(score.max)}
-          </dd>
-        </div>
-        <div>
-          <dt>Score documental</dt>
-          <dd>{formatPercent(score.documentary)}</dd>
-        </div>
-        <div>
-          <dt>Favoráveis</dt>
-          <dd>{score.favorable}</dd>
-        </div>
-        <div>
-          <dt>Críticas sem confirmação</dt>
-          <dd>peso {score.criticalUnconfirmedWeight}</dd>
-        </div>
-      </dl>
-    </section>
-  );
-}
-
-type SummaryListProps = {
-  title: string;
-  items: string[];
-  empty: string;
-  ordered?: boolean;
-  tone?: 'attention';
-};
-
-function SummaryList({ title, items, empty, ordered = false, tone }: SummaryListProps) {
-  const List = ordered ? 'ol' : 'ul';
-  return (
-    <section className={`card summary-list${tone ? ` summary-list--${tone}` : ''}`}>
-      <h3 className="summary-list__title">{title}</h3>
+    <div className="advantage-list">
+      <h4>{label}</h4>
       {items.length ? (
-        <List>
+        <ul>
           {items.map((item) => (
             <li key={item}>{item}</li>
           ))}
-        </List>
+        </ul>
       ) : (
-        <p className="muted-text">{empty}</p>
+        <p className="muted-text">Nenhuma vantagem comprovada.</p>
       )}
-    </section>
+    </div>
   );
 }

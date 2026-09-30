@@ -1,6 +1,7 @@
 // Regras visuais da base de conhecimento (seção 8). Só mapeiam dados já calculados para cores;
 // nenhuma regra de pontuação vive na interface.
 import type { Tone } from '../components/Badge';
+import type { IconName } from '../components/Icon';
 import type {
   ComparisonItem,
   ContractStatus,
@@ -60,24 +61,33 @@ export function importanceTone(importance: Importance): Tone {
   }
 }
 
+// Status de processamento usam só azul ou neutro (SPEC-010); verde, amarelo, laranja e vermelho
+// ficam reservados aos resultados da comparação. O ícone e o texto carregam o significado.
 export function policyStatusTone(status: PolicyStatus): Tone {
+  return status === 'READY' || status === 'PROCESSING' ? 'info' : 'neutral';
+}
+
+export function policyStatusIcon(status: PolicyStatus): IconName | undefined {
   switch (status) {
     case 'READY':
-      return 'success';
+      return 'checkCircle';
     case 'ATTENTION':
-      return 'medium';
-    case 'PROCESSING':
-      return 'info';
     case 'FAILED':
-      return 'danger';
+      return 'alert';
     case 'CANCELLED':
-      return 'neutral';
+      return 'x';
+    case 'PROCESSING':
+      return undefined;
   }
 }
 
 export function documentStatusTone(status: DocumentStatus): Tone {
-  if (status === 'COMPLETED') return 'success';
-  if (status === 'FAILED') return 'danger';
-  if (status === 'CANCELLED') return 'neutral';
-  return 'info';
+  return status === 'FAILED' || status === 'CANCELLED' ? 'neutral' : 'info';
+}
+
+export function documentStatusIcon(status: DocumentStatus): IconName | undefined {
+  if (status === 'COMPLETED') return 'checkCircle';
+  if (status === 'FAILED') return 'alert';
+  if (status === 'CANCELLED') return 'x';
+  return undefined;
 }

@@ -24,7 +24,13 @@ import {
   isPolicyBusy,
   PROCESSING_POLL_MS,
 } from '../../shared/processing';
-import { contractTone, documentStatusTone, policyStatusTone } from '../../shared/tones';
+import {
+  contractTone,
+  documentStatusIcon,
+  documentStatusTone,
+  policyStatusIcon,
+  policyStatusTone,
+} from '../../shared/tones';
 import { useApiData } from '../../shared/useApiData';
 import type { Concept, ConceptOccurrence, ContractStatus, PolicyDetail } from '../../types/domain';
 import { setFlash } from '../../shared/flash';
@@ -91,7 +97,11 @@ function PolicyDetailView({ policy, concepts, back }: ViewProps) {
         subtitle={policy.name}
         back={back}
         action={
-          <Badge tone={policyStatusTone(policy.status)} busy={isPolicyBusy(policy.status)}>
+          <Badge
+            tone={policyStatusTone(policy.status)}
+            icon={policyStatusIcon(policy.status)}
+            busy={isPolicyBusy(policy.status)}
+          >
             {POLICY_STATUS_LABELS[policy.status]}
           </Badge>
         }
@@ -106,11 +116,7 @@ function PolicyDetailView({ policy, concepts, back }: ViewProps) {
               {describeProcessing(policy.documents)} A página se atualiza sozinha.
             </span>
           </p>
-          <CancelExtractionButton
-            policyId={policy.id}
-            policyName={policy.name}
-            variant="block"
-          />
+          <CancelExtractionButton policyId={policy.id} policyName={policy.name} variant="block" />
         </div>
       )}
 
@@ -167,6 +173,7 @@ function PolicyDetailView({ policy, concepts, back }: ViewProps) {
                 <strong className="doc-card__name">{document.filename}</strong>
                 <Badge
                   tone={documentStatusTone(document.status)}
+                  icon={documentStatusIcon(document.status)}
                   busy={isDocumentBusy(document.status)}
                 >
                   {DOCUMENT_STATUS_LABELS[document.status]}

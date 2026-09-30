@@ -109,6 +109,8 @@ class PolicyDocument(DomainModel):
     extraction_quality: Level | None = None
     ocr_required: bool = False
     failure: str | None = None
+    failure_code: str | None = None
+    failure_retryable: bool = False
     uploaded_at: datetime = Field(default_factory=utc_now)
 
 
@@ -230,6 +232,7 @@ class QualityCheck(DomainModel):
 class Failure(DomainModel):
     code: str
     message: str
+    retryable: bool = False
 
 
 class Comparison(DomainModel):

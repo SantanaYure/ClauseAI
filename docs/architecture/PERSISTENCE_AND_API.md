@@ -2,7 +2,7 @@
 
 ## 1. Firestore
 
-O Firestore armazena metadados e estruturas consultáveis. O PDF/imagem original fica no Firebase Storage. O resultado bruto da IA é separado do modelo estruturado para auditoria e para evitar que uma resposta não validada seja usada na UI.
+O Firestore armazena metadados e estruturas consultáveis. O original (PDF, imagem ou DOCX) fica no armazenamento de arquivos (ver ADR-022). O resultado bruto da IA é separado do modelo estruturado para auditoria e para evitar que uma resposta não validada seja usada na UI.
 
 ### Implementação atual (MVP)
 
@@ -14,7 +14,7 @@ policies/{policy_id}/concept_occurrences/{concept_id} # ocorrências consolidada
 comparisons/{comparison_id}                           # itens, avaliações, scores, perfis, resumo e Quality Gate
 ```
 
-Os originais ficam em `policies/{policy_id}/{document_id}.{pdf|png|jpg}`, sem URL pública: por padrão numa pasta local do backend (`STORAGE_BACKEND=local`, `backend/.data/uploads`) e, opcionalmente, no Firebase Storage (`STORAGE_BACKEND=firebase`, plano Blaze) — ver ADR-022. A base de conhecimento é um arquivo JSON versionado no código (`backend/app/infrastructure/knowledge_base/knowledge_base.json`), gerado pelo script Python `backend/scripts/build_knowledge_base.py` a partir de `docs/domain/`. As coleções abaixo continuam como alvo de evolução (histórico de jobs, resultado bruto da IA e `processed_events`).
+Os originais ficam em `policies/{policy_id}/{document_id}.{pdf|png|jpg|docx}`, sem URL pública: por padrão numa pasta local do backend (`STORAGE_BACKEND=local`, `backend/.data/uploads`) e, opcionalmente, no Firebase Storage (`STORAGE_BACKEND=firebase`, plano Blaze) — ver ADR-022. A base de conhecimento é um arquivo JSON versionado no código (`backend/app/infrastructure/knowledge_base/knowledge_base.json`), gerado pelo script Python `backend/scripts/build_knowledge_base.py` a partir de `docs/domain/`. As coleções abaixo continuam como alvo de evolução (histórico de jobs, resultado bruto da IA e `processed_events`).
 
 ### Coleções (modelo de referência)
 
@@ -58,7 +58,9 @@ Carregada a partir de [`domain/DO_KNOWLEDGE_BASE.md`](../domain/DO_KNOWLEDGE_BAS
 
 ### `evidences`
 
-`evidence_id`, `document_id`, `page`, `section_ref`, `clause_ref`, `literal_text`, `content_kind`, `extraction_method`, `confidence`, `low_confidence`, `version`. Registros não são sobrescritos; correções criam nova versão.
+`evidence_id`, `document_id`, `page`, `clause_ref`, `literal_text`, `content_kind`, `extraction_method`, `confidence`, `low_confidence`, `version`. Registros não são sobrescritos; correções criam nova versão.
+
+**Origem em DOCX.** DOCX não tem páginas fixas. O backend divide o texto em blocos lógicos numerados a partir de 1, e o número do bloco vai em `page`. Um bloco novo começa em quebra de página explícita, quebra de seção que inicia página ou a cada 3.500 caracteres, sempre entre parágrafos. A numeração é determinística: o mesmo arquivo gera sempre os mesmos blocos. `extraction_method` é `NATIVE`. Não existe `section_ref` no modelo de evidência atual. A interface mostra "bloco" para DOCX (SPEC-004).
 
 ### `documents/{document_id}`
 
@@ -84,6 +86,8 @@ Carregada a partir de [`domain/DO_KNOWLEDGE_BASE.md`](../domain/DO_KNOWLEDGE_BAS
   "schema_version": 1
 }
 ```
+
+`file_kind` aceita `SEARCHABLE_PDF`, `SCANNED_PDF`, `IMAGE` e `DOCX`. Em DOCX, `ocr_required` é sempre `false` e `page_count` é o total de blocos lógicos (não há páginas fixas).
 
 ### `processing_jobs`
 
@@ -143,15 +147,15 @@ Implementados: `POST/GET /policies`, `GET/DELETE /policies/{id}`, `POST/GET /com
 
 **Objetivo:** criar uma apólice com todos os seus documentos de uma vez (tela “Adicionar apólice”).
 
-**Request:** `multipart/form-data` com `insurer?`, `name?` e um ou mais campos `files[]`, cada um acompanhado de `document_types[]` (`POLICY`, `SPECIFICATION`, `GENERAL_CONDITIONS`, `ENDORSEMENT`…). Cada arquivo passa pelas mesmas validações de `POST /documents` e gera um `Document` ligado à apólice.
+**Request:** `multipart/form-data` com `insurer?`, `name?` e um ou mais campos `files[]`, cada um acompanhado de `document_types[]` (`POLICY`, `SPECIFICATION`, `GENERAL_CONDITIONS`, `ENDORSEMENT`…). Cada arquivo (PDF, JPG, PNG ou DOCX) passa pelas mesmas validações de `POST /documents` e gera um `Document` ligado à apólice.
 
 **Response `202`:** `policy_id`, `status: PROCESSING`, `document_ids[]`, `correlation_id`.
 
-**Erros:** os de `POST /documents`, mais `422 INVALID_DOCUMENT_TYPE`.
+**Erros:** os de `POST /documents`, mais `422 INVALID_DOCUMENT_TYPE`. O envio é tudo ou nada: um arquivo inválido recusa o lote inteiro e a mensagem cita o nome do arquivo. Qualquer falha de storage responde `503 STORAGE_UNAVAILABLE` (`details.retryable = true`), apaga os originais já gravados e não cria a apólice.
 
 ### POST `/documents`
 
-**Objetivo:** receber PDF/imagem, validar extensão/MIME/tamanho, salvar o original e iniciar processamento. Com `policy_id`, acrescenta o documento (por exemplo, um endosso) a uma apólice existente.
+**Objetivo:** receber PDF, imagem (JPG, PNG) ou DOCX, validar o tipo pelo conteúdo, o tamanho e a integridade, salvar o original e iniciar processamento. Com `policy_id`, acrescenta o documento (por exemplo, um endosso) a uma apólice existente.
 
 **Request:** `multipart/form-data`, campo `file`; opcional `policy_id`, `document_type` e `metadata` JSON limitado.
 
@@ -166,7 +170,22 @@ Implementados: `POST/GET /policies`, `GET/DELETE /policies/{id}`, `POST/GET /com
 }
 ```
 
-**Erros:** `400 INVALID_FILE`, `413 FILE_TOO_LARGE`, `415 UNSUPPORTED_MEDIA_TYPE`, `422 INVALID_METADATA`, `503 STORAGE_UNAVAILABLE`.
+**Erros:** `400 INVALID_FILE`, `413 FILE_TOO_LARGE`, `415 UNSUPPORTED_MEDIA_TYPE`, `422` (`DOCX_PROTECTED`, `DOCX_CORRUPTED`, `PDF_PROTECTED`, `PDF_CORRUPTED`, `INVALID_METADATA`), `503 STORAGE_UNAVAILABLE`.
+
+**Formatos e detalhe do erro.** Aceitos: `application/pdf`, `image/jpeg`, `image/png` e `application/vnd.openxmlformats-officedocument.wordprocessingml.document` (DOCX). O tipo vem do conteúdo: DOCX é um zip com `[Content_Types].xml` e `word/document.xml`. A mensagem vem em português:
+
+| Situação | HTTP e código | `message` |
+|---|---|---|
+| DOCX protegido por senha ou `.doc` legado | `422 DOCX_PROTECTED` | "O arquivo {nome} está protegido por senha ou está em formato antigo (.doc). Remova a proteção e envie novamente como .docx." |
+| DOCX corrompido | `422 DOCX_CORRUPTED` | "O arquivo {nome} está corrompido e não pôde ser aberto. Gere o DOCX novamente." |
+| PDF protegido por senha | `422 PDF_PROTECTED` | "O arquivo {nome} está protegido por senha. Remova a proteção e envie novamente." |
+| PDF corrompido | `422 PDF_CORRUPTED` | "O arquivo {nome} está corrompido e não pôde ser aberto. Gere o PDF novamente." |
+| Zip acima de 20 × `MAX_UPLOAD_MB` descompactado | `413 FILE_TOO_LARGE` | "O conteúdo do arquivo {nome} excede o limite permitido." |
+| XLSX, PPTX, `.docm`, `.dotx`, outros zips e arquivo renomeado | `415 UNSUPPORTED_MEDIA_TYPE` | "Formato não aceito: {nome}. Use PDF, DOCX, JPG ou PNG." |
+
+As regras de decisão entre "protegido", "corrompido" e "não suportado" estão na SPEC-001.
+
+**Erros do processamento (assíncrono).** Não mudam o `202` do upload. Documento com falha fica `FAILED`. Os documentos da apólice (`GET /policies/{id}`) trazem `failure` (mensagem), `failure_code` (código do erro do worker, ou `UNEXPECTED_ERROR` para falha inesperada) e `failure_retryable` (`true` em `UNEXPECTED_ERROR` e nos códigos de IA retryable). Os dois campos novos são aditivos: `null` e `false` quando não há falha. Códigos: `DOCX_WITHOUT_TEXT` (422, "O arquivo {nome} não contém texto legível."), os de arquivo acima e os da IA: `AI_AUTH_FAILED` (503), `AI_MODEL_NOT_FOUND` (503), `AI_BAD_REQUEST` (502), `AI_OUTPUT_TRUNCATED` (422), `MODEL_UNAVAILABLE` (503), `MODEL_RATE_LIMITED` (503) e `INVALID_MODEL_OUTPUT` (503). Todos os de IA levam `details.retryable` no envelope de erro: `true` para `MODEL_UNAVAILABLE`, `MODEL_RATE_LIMITED` e `INVALID_MODEL_OUTPUT`; `false` para os demais. Mensagens completas na SPEC-004.
 
 ### GET `/documents`
 
@@ -250,7 +269,7 @@ Estados públicos: `UPLOADED`, `PROCESSING`, `EXTRACTING`, `VALIDATING`, `COMPLE
 
 **Query:** `status?`, `decision_mode?`, `limit`, `cursor`.
 
-**Response `200`:** itens com `comparison_id`, `created_at`, `status`, `policies` (A/B com seguradora), `adherence_a`, `adherence_b`, `decision_mode` e `failure` quando `FAILED`.
+**Response `200`:** itens com `comparison_id`, `created_at`, `status`, `policies` (A/B com seguradora), `adherence_a`, `adherence_b`, `decision_mode` e, quando `FAILED`, `failure_reason` (mensagem), `failure_code` e `failure_retryable` (campos aditivos; `null` e `false` nas demais).
 
 ### GET `/comparisons/{comparison_id}`
 
@@ -280,7 +299,7 @@ Estados públicos: `UPLOADED`, `PROCESSING`, `EXTRACTING`, `VALIDATING`, `COMPLE
 }
 ```
 
-Estados: `REQUESTED`, `DETERMINISTIC_COMPLETED`, `ASSESSING`, `SCORED`, `SUMMARIZING`, `COMPLETED`, `PARTIAL`, `FAILED`. Números trafegam como números JSON; o cálculo interno usa `Decimal` e arredonda só na saída.
+Estados: `REQUESTED`, `DETERMINISTIC_COMPLETED`, `ASSESSING`, `SCORED`, `SUMMARIZING`, `COMPLETED`, `PARTIAL`, `FAILED`. `PARTIAL` ocorre quando a avaliação por conceito ou a redação do resumo falha (SPEC-009). Na avaliação, os conceitos que dependiam da IA ficam com 0 ponto, confiança baixa e evidência insuficiente. A falha fica em `failure` com `code`, `message` e `retryable`; a API expõe `failure_reason` (mensagem), `failure_code` e `failure_retryable` na listagem de comparações. Números trafegam como números JSON; o cálculo interno usa `Decimal` e arredonda só na saída.
 
 ### GET `/concepts`
 

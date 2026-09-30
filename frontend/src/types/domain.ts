@@ -20,16 +20,10 @@ export type DocumentType =
   | 'PROPOSAL'
   | 'OTHER';
 
-export type FileKind = 'SEARCHABLE_PDF' | 'SCANNED_PDF' | 'IMAGE';
+export type FileKind = 'SEARCHABLE_PDF' | 'SCANNED_PDF' | 'IMAGE' | 'DOCX';
 
 export type DocumentStatus =
-  | 'UPLOADED'
-  | 'PROCESSING'
-  | 'EXTRACTING'
-  | 'VALIDATING'
-  | 'COMPLETED'
-  | 'FAILED'
-  | 'CANCELLED';
+  'UPLOADED' | 'PROCESSING' | 'EXTRACTING' | 'VALIDATING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
 
 export type PolicyStatus = 'READY' | 'ATTENTION' | 'PROCESSING' | 'FAILED' | 'CANCELLED';
 
@@ -76,6 +70,7 @@ export type PolicyDocument = {
   status: DocumentStatus;
   extractionQuality: Level | null;
   ocrRequired: boolean;
+  failure: string | null;
 };
 
 export type LimitBasis = 'AGGREGATE' | 'PER_CLAIM' | 'PER_CLAIM_AND_AGGREGATE';

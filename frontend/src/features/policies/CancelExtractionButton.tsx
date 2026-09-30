@@ -72,8 +72,8 @@ export function CancelExtractionButton({
             </p>
           )}
           <p>
-            O processamento dos documentos será interrompido imediatamente. O status da apólice
-            será marcado como <strong>Cancelada</strong> e você poderá excluí-la ou reenviar se desejar.
+            O processamento dos documentos será interrompido imediatamente. O status da apólice será
+            marcado como <strong>Cancelada</strong> e você poderá excluí-la ou reenviar se desejar.
           </p>
         </ConfirmDialog>
       )}

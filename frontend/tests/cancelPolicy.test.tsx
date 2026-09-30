@@ -78,7 +78,9 @@ describe('policy extraction cancellation', () => {
       fireEvent.click(cancelButton);
     });
     const dialog = screen.getByRole('alertdialog', { name: 'Cancelar extração?' });
-    expect(within(dialog).getByText(/O processamento dos documentos será interrompido/)).toBeInTheDocument();
+    expect(
+      within(dialog).getByText(/O processamento dos documentos será interrompido/),
+    ).toBeInTheDocument();
 
     // Cancel the dialog
     await act(async () => {
@@ -89,13 +91,17 @@ describe('policy extraction cancellation', () => {
 
     // Reopen and confirm
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Cancelar extração de Apólice D&O Alfa' }));
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Cancelar extração de Apólice D&O Alfa' }),
+      );
     });
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Sim, cancelar extração' }));
     });
 
-    const cancelCall = fetchMock.mock.calls.find(([url]) => url.includes('/api/v1/policies/pol_proc/cancel'));
+    const cancelCall = fetchMock.mock.calls.find(([url]) =>
+      url.includes('/api/v1/policies/pol_proc/cancel'),
+    );
     expect(cancelCall).toBeDefined();
     expect(cancelCall![1]?.method).toBe('POST');
   });

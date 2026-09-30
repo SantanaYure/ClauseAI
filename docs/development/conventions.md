@@ -1,5 +1,26 @@
 # Convenções de desenvolvimento
 
+## Equipe de subagentes e fluxo de trabalho
+
+O fluxo de trabalho é orientado por duas fontes na raiz do repositório:
+
+- [`CLAUDE.md`](../../CLAUDE.md): regras da sessão, tabela da equipe, fluxo e critérios de conclusão.
+- [`.claude/agents/`](../../.claude/agents/): um arquivo por subagente, com função e limites.
+
+Toda melhoria do sistema passa pela equipe. O fluxo é:
+
+```text
+ux-ui-norman decide → interface-designer e frontend-specialist implementam → backend-specialist entrega a API → software-engineer-docs documenta → qa valida → devops publica (só quando pedido)
+```
+
+Regras:
+
+- A documentação em `docs/` é a fonte de verdade (SDD). Decisão nova vira spec, ADR ou roadmap junto da implementação.
+- Cada agente mexe só na sua área. Documentação não altera código, e código não altera documentação por conta própria.
+- O que depender do código final fica marcado como pendente de confirmação até o especialista confirmar.
+- Se a sessão for interrompida, retome a tarefa com os mesmos agentes.
+- Commit, PR e deploy só a pedido, pelo `devops`.
+
 ## Dependências
 
 O domínio não importa FastAPI, Firebase, Gemini, bibliotecas de UI ou detalhes de banco. Adapters externos pertencem à infraestrutura. A apresentação traduz HTTP; a aplicação orquestra casos de uso; o domínio mantém contratos independentes.
