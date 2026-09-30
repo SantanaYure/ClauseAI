@@ -559,6 +559,7 @@ O usuário vê 3 passos, em linguagem simples:
 ### Escolha das apólices
 
 - Duas áreas grandes, os slots A e B, rotulados "Apólice 01" (A) e "Apólice 02" (B). Cada uma mostra a apólice escolhida ou convida a escolher.
+- No celular os slots ficam empilhados (A sobre B). A partir de 640px ficam lado a lado, com a mesma largura, sem ultrapassar a página, mesmo com nome de apólice longo (o texto é cortado no seletor).
 - Apólice em processamento, com falha ou cancelada aparece desabilitada, com o motivo escrito ("ainda sendo lida", "a leitura falhou", "leitura cancelada").
 - O botão **Comparar** fica indisponível enquanto faltar algo e diz o que falta ("Escolha a Apólice 02", "Escolha duas apólices diferentes").
 - Perfil de risco fica em **Opções avançadas**, recolhidas. O padrão é Base.

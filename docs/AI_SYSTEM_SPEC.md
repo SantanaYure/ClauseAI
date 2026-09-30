@@ -87,6 +87,13 @@ A leitura nativa (biblioteca de PDF na infraestrutura) é usada quando há camad
 
 No máximo `AI_MAX_ATTEMPTS` tentativas (padrão 3) por operação, com timeout configurável e backoff exponencial com jitter. Limite de uso (429) espera o tempo pedido pelo provedor, em orçamento próprio, e só então vira `MODEL_RATE_LIMITED`. Não repetir erro de schema deterministicamente sem modificar/diagnosticar a entrada. Circuit breaker é evolução futura.
 
+Implementação:
+
+- Uma única camada de retry: toda chamada ao Gemini passa por `GeminiClient.with_retries` (sobre `call_with_retries`). O total por operação é `AI_MAX_ATTEMPTS`, incluindo erro de schema. Caminho feliz: 1 chamada.
+- Avaliação: cada nova tentativa pede só os conceitos que faltam e mescla o que já veio. Item fora do schema é descartado e pedido de novo, então a mesma entrada nunca se repete.
+- Resumo executivo: erro de schema consome o mesmo orçamento.
+- Esgotadas as tentativas por saída inválida: erro `INVALID_MODEL_OUTPUT` com `retryable=true`.
+
 ## 5. Schema JSON de extração
 
 `schema_version: 1`:
@@ -165,7 +172,14 @@ Relações: `EQUAL`, `DIFFERENT`, `ONLY_LEFT`, `ONLY_RIGHT`, `UNKNOWN`, `NOT_COM
 
 ### 8.1 Avaliação (IA)
 
-Para cada conceito ativo, o Gemini recebe as ocorrências e evidências das duas apólices, o critério de avaliação e as escalas fechadas. Devolve, por apólice: `contract_status`, `base_result`, `adjustment_factor`, `justification`, `evidence_ids`, `confidence`, `sufficient_evidence` e a `main_difference` entre apólices. A saída é rejeitada se usar valor fora das escalas, omitir justificativa para valor ≠ 1,00, citar evidência inexistente ou pontuar acima de zero um conceito com exclusão expressa.
+Para cada conceito ativo, o Gemini recebe as ocorrências e evidências das duas apólices, o critério de avaliação e as escalas fechadas. Devolve, por apólice: `base_result`, `adjustment_factor`, `justification` e `confidence`, além da `main_difference` entre apólices. O `contract_status` vem da extração, não do modelo. O backend não rejeita a saída; corrige-a de forma determinística (`sanitize_decision`):
+
+- arredonda cada valor para o passo mais próximo da escala;
+- limita o Resultado-base pela situação contratual: `DIVERGENT` até 0,50, `NOT_PROVEN` até 0,25;
+- zera Resultado-base e Fator em `EXCLUDED` e `NOT_FOUND`;
+- redução sem justificativa recebe texto padrão e confiança `LOW`.
+
+`evidence_ids` e `sufficient_evidence` ainda não são pedidos ao modelo (pendência no ROADMAP).
 
 ### 8.2 Pontuação (determinística)
 
@@ -176,6 +190,15 @@ O `ScoringService` do domínio aplica as fórmulas da seção 6.4 da base de con
 O Gemini recebe apenas números calculados, pareceres, avaliações e evidências selecionadas e produz o resumo da seção 7.2 da base de conhecimento. Não pode criar números nem trocar pareceres. Se score e leitura qualitativa divergirem, deve explicar a divergência. Se houver informação incompleta, termina com `BROKER_GUIDANCE`.
 
 O resultado separa `facts`, `interpretations`, `scores`, `recommendation` e `uncertainties`.
+
+Trava da conclusão (`is_grounded_conclusion`, em `backend/app/domain/services/conclusion_guard.py`, função pura). Se a conclusão do modelo falhar, vale a conclusão determinística:
+
+- todo número da conclusão é comparado por valor com os fatos. Aceita formato BR (`1.000.000,00`, `1,5`) e multiplicadores (mil, mi, milhão/milhões, bi, bilhão). Exemplo: "10 milhões" = "R$ 10.000.000,00";
+- percentual só vale se constar como percentual nos fatos; R$, contagens e demais números, se o valor aparecer nos fatos;
+- "Apólice 01" e "Apólice 02" não contam como número;
+- em `CONDITIONED`, é rejeitado texto que declare uma apólice única vencedora ("melhor", "superior", "mais vantajosa", "vencedora", "recomenda-se a Apólice X", "optar pela Apólice X"). "Tem o maior score" é aceito.
+
+Limite conhecido: números por extenso não são verificados.
 
 ## 9. Prompts versionados
 
@@ -240,7 +263,7 @@ Retorne somente JSON válido conforme schema_version=1.
 - **Saída:** estrutura `ExecutiveSummary` do modelo de domínio.
 - **Regras:** não escolher apólice só pelo percentual; declarar `CONDITIONED` quando a completude for baixa ou a decisão depender de conceito crítico inconclusivo.
 
-> **Implementação atual da avaliação (Gemini):** `P-ASSESS-001` avalia em lotes de `ASSESSMENT_BATCH_SIZE` conceitos (padrão 10); o backend ajusta cada valor à escala permitida, limita `NOT_PROVEN` a 0,25 e `DIVERGENT` a 0,50, zera exclusões e ausências e exige justificativa para reduções. `P-EXECUTIVE-001` reescreve só a conclusão; se ela citar um percentual que não foi calculado, o texto determinístico é mantido. O modelo é configurável em `GEMINI_MODEL`.
+> **Implementação atual da avaliação (Gemini):** `P-ASSESS-001` avalia em lotes de `ASSESSMENT_BATCH_SIZE` conceitos (padrão 10); o backend ajusta cada valor à escala permitida, limita `NOT_PROVEN` a 0,25 e `DIVERGENT` a 0,50, zera exclusões e ausências e exige justificativa para reduções. `P-EXECUTIVE-001` reescreve só a conclusão; se ela não passar na trava da seção 8.3, o texto determinístico é mantido. O modelo é configurável em `GEMINI_MODEL`.
 
 ### P-QUERY-001 — consulta
 
@@ -261,7 +284,7 @@ Retorne somente JSON válido conforme schema_version=1.
 - Não permitir que o texto do PDF altere modelo, ferramentas, schema, instruções ou destinatários.
 - Não enviar credenciais, prompts internos ou dados de outros documentos.
 - Validar enumerações, tamanho, profundidade JSON e quantidade de itens.
-- Rejeitar resposta que contenha campos proibidos, número calculado pela IA, alteração de peso, valor fora das escalas ou alegação sem evidência.
+- Rejeitar resposta que contenha campos proibidos, alteração de peso ou alegação sem evidência. Valor fora da escala é arredondado e limitado (seção 8.1). Conclusão com número ausente dos fatos ou vencedor único em `CONDITIONED` é trocada pela determinística (seção 8.3).
 - Garantir que toda saída ao usuário com limitação relevante contenha `BROKER_GUIDANCE`.
 - Reduzir prompt e conteúdo ao mínimo necessário para comparação.
 - Manter uma lista de strings de teste de injection nos fixtures, sem depender de filtro textual como única defesa.
@@ -279,7 +302,8 @@ Evento/log de cada chamada deve ter `correlation_id`, entidade, provider, modelo
 - normalização sem inferência e vínculo correto a `concept_id`;
 - fórmulas de pontos, scores, completude e perfis (incluindo total de pesos 207);
 - regras de parecer (limiar 0,10, ambas excluídas, evidência não comparável);
-- retries apenas em erros configurados;
+- retries apenas em erros configurados, com teto total de `AI_MAX_ATTEMPTS` por operação (`test_ai_call_budget.py`);
+- trava da conclusão: números fora dos fatos e vencedor único em `CONDITIONED` (`test_conclusion_guard.py`);
 - redaction de logs;
 - idempotência de `ExtractionCompleted`.
 

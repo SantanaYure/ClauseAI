@@ -72,7 +72,7 @@ async def test_provider_client_errors_are_classified_and_sanitized(
     client = _client_raising(error)
 
     with pytest.raises(InfrastructureError) as raised:
-        await client.complete_json("oi", "P-TEST")
+        await client.complete_json_once("oi")
 
     assert raised.value.code == code
     assert raised.value.details == {"retryable": False}
@@ -92,7 +92,7 @@ async def test_truncated_output_is_reported_clearly() -> None:
         aio=SimpleNamespace(models=SimpleNamespace(generate_content=truncated))
     )
     with pytest.raises(InfrastructureError) as raised:
-        await client.complete_json("oi", "P-TEST")
+        await client.complete_json_once("oi")
     assert raised.value.code == "AI_OUTPUT_TRUNCATED"
 
 
