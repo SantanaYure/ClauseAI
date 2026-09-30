@@ -481,7 +481,6 @@ $tones: danger, high, medium, success, muted, info, neutral;
 
 .callout {
   padding: var(--space-5);
-  border-left: 4px solid var(--tone-info-text);
   border-radius: var(--radius-lg);
   background: var(--tone-info-bg);
 
@@ -1104,8 +1103,7 @@ $tones: danger, high, medium, success, muted, info, neutral;
 
 .evidence {
   padding: var(--space-3);
-  border-left: 3px solid var(--color-border-strong);
-  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  border-radius: var(--radius-sm);
   background: var(--color-surface-muted);
 }
 
@@ -1187,11 +1185,6 @@ $tones: danger, high, medium, success, muted, info, neutral;
   min-height: 11rem;
   padding: var(--space-6);
   border-radius: var(--radius-xl);
-  border-top: 6px solid var(--color-slot-a);
-
-  &--b {
-    border-top-color: var(--color-slot-b);
-  }
 
   // Opções longas não podem ditar a largura do card: o select cabe no slot e trunca o texto.
   select {
@@ -1414,19 +1407,14 @@ $tones: danger, high, medium, success, muted, info, neutral;
   }
 }
 
-// Conclusão em destaque: card grande, título e texto legíveis; a faixa lateral vem do tom do parecer.
+// Conclusão em destaque: card grande, título e texto legíveis; o tom do parecer vem do selo.
 .decision {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
   padding: var(--space-6);
   border-radius: var(--radius-xl);
-  border-left: 6px solid var(--tone-success-edge);
   box-shadow: var(--shadow-md);
-
-  &--conditioned {
-    border-left-color: var(--tone-medium-edge);
-  }
 
   p {
     font-size: var(--font-size-lg);
@@ -1455,12 +1443,7 @@ $tones: danger, high, medium, success, muted, info, neutral;
   flex-direction: column;
   gap: var(--space-3);
   padding: var(--space-4);
-  border-top: 6px solid var(--color-slot-a);
   border-radius: var(--radius-lg);
-
-  &--b {
-    border-top-color: var(--color-slot-b);
-  }
 
   @include tablet {
     padding: var(--space-6);
@@ -1577,10 +1560,6 @@ $tones: danger, high, medium, success, muted, info, neutral;
   li + li {
     margin-top: var(--space-1);
   }
-
-  &--attention {
-    border-left: 6px solid var(--tone-medium-edge);
-  }
 }
 
 .summary-list__title {
@@ -1632,13 +1611,6 @@ $tones: danger, high, medium, success, muted, info, neutral;
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  border-left-width: 6px;
-
-  @each $tone in danger, high, medium, success, muted {
-    &--#{$tone} {
-      border-left-color: var(--tone-#{$tone}-edge);
-    }
-  }
 }
 
 .concept-row__sides {
@@ -1788,7 +1760,6 @@ $tones: danger, high, medium, success, muted, info, neutral;
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  border-left: 6px solid var(--color-text);
 }
 
 .answer__match {
@@ -2169,12 +2140,7 @@ $tones: danger, high, medium, success, muted, info, neutral;
   flex-direction: column;
   gap: var(--space-4);
   padding: var(--space-4);
-  border-top: 6px solid var(--color-slot-a);
   border-radius: var(--radius-lg);
-
-  &--b {
-    border-top-color: var(--color-slot-b);
-  }
 
   @include tablet {
     padding: var(--space-6);
