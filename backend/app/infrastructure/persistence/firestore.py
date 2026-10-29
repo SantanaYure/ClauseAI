@@ -14,7 +14,7 @@ from typing import Any
 
 from google.cloud.firestore_v1.base_query import FieldFilter
 
-from app.domain.entities import Comparison, ConceptOccurrence, Policy
+from app.domain.entities import Comparison, ConceptOccurrence, Policy, PolicySummary
 
 OCCURRENCES = "concept_occurrences"
 _OWNERSHIP_FIELDS = ("owner_id", "expires_at")
@@ -83,6 +83,23 @@ class FirestorePolicyRepository:
                 .limit(limit)
             )
             return self._load_all(snapshot.id for snapshot in query.stream())
+
+        return await asyncio.to_thread(run)
+
+    async def list_recent_summaries(self, owner_id: str, limit: int) -> list[PolicySummary]:
+        def run() -> list[PolicySummary]:
+            query = (
+                self._collection.where(filter=_owned_by(owner_id))
+                .order_by("created_at", direction="DESCENDING")
+                .limit(limit)
+                .select(list(PolicySummary.model_fields))
+            )
+            summaries: list[PolicySummary] = []
+            for snapshot in query.stream():
+                data = snapshot.to_dict()
+                if _is_owned(data):
+                    summaries.append(PolicySummary.model_validate(data))
+            return summaries
 
         return await asyncio.to_thread(run)
 

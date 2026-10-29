@@ -137,6 +137,39 @@ class Policy(DomainModel):
         return self.expires_at <= now
 
 
+class PolicySummary(DomainModel):
+    """Lightweight policy read model for lists that do not need occurrences."""
+
+    id: str
+    owner_id: str = Field(min_length=1)
+    expires_at: datetime
+    insurer: str
+    name: str
+    number: str | None = None
+    validity: str | None = None
+    status: PolicyStatus = PolicyStatus.PROCESSING
+    documents: list[PolicyDocument] = Field(default_factory=list)
+    alerts: list[str] = Field(default_factory=list)
+
+    def is_expired(self, now: datetime) -> bool:
+        return self.expires_at <= now
+
+    @classmethod
+    def from_policy(cls, policy: Policy) -> "PolicySummary":
+        return cls(
+            id=policy.id,
+            owner_id=policy.owner_id,
+            expires_at=policy.expires_at,
+            insurer=policy.insurer,
+            name=policy.name,
+            number=policy.number,
+            validity=policy.validity,
+            status=policy.status,
+            documents=policy.documents,
+            alerts=policy.alerts,
+        )
+
+
 # ---------- Extraction ----------
 
 

@@ -5,7 +5,7 @@ Data lives only while the process runs; nothing is pre-loaded.
 
 from datetime import datetime
 
-from app.domain.entities import Comparison, Policy
+from app.domain.entities import Comparison, Policy, PolicySummary
 
 
 class InMemoryPolicyRepository:
@@ -23,6 +23,10 @@ class InMemoryPolicyRepository:
         owned = [p for p in self._items.values() if p.owner_id == owner_id]
         ordered = sorted(owned, key=lambda p: p.created_at, reverse=True)
         return [policy.model_copy(deep=True) for policy in ordered[:limit]]
+
+    async def list_recent_summaries(self, owner_id: str, limit: int) -> list[PolicySummary]:
+        policies = await self.list_recent(owner_id, limit)
+        return [PolicySummary.from_policy(policy) for policy in policies]
 
     async def delete(self, policy_id: str) -> None:
         self._items.pop(policy_id, None)

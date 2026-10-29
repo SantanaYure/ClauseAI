@@ -31,6 +31,7 @@ from app.domain.entities import (
     KnowledgeBase,
     Policy,
     PolicyDocument,
+    PolicySummary,
     utc_now,
 )
 from app.domain.interfaces.events import Event, EventBus
@@ -544,9 +545,11 @@ class PolicyService:
             raise _policy_not_found()
         return policy
 
-    async def list_policies(self, owner_id: str, limit: int = OWNER_SCAN_LIMIT) -> list[Policy]:
+    async def list_policies(
+        self, owner_id: str, limit: int = OWNER_SCAN_LIMIT
+    ) -> list[PolicySummary]:
         """The owner's policies that are still within the retention period."""
 
         now = utc_now()
-        policies = await self._repository.list_recent(owner_id, OWNER_SCAN_LIMIT)
+        policies = await self._repository.list_recent_summaries(owner_id, OWNER_SCAN_LIMIT)
         return [policy for policy in policies if not policy.is_expired(now)][:limit]
