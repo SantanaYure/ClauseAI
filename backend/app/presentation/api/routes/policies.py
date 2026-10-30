@@ -81,7 +81,7 @@ async def list_policies(
     owner: Owner, services: Services, limit: Annotated[int, Query(ge=1, le=100)] = 20
 ) -> Page[PolicySummaryResponse]:
     policies = await services.policies.list_policies(owner, limit)
-    return Page(items=[PolicySummaryResponse.of(p) for p in policies])
+    return Page(items=[PolicySummaryResponse.from_model(p) for p in policies])
 
 
 @router.post("/{policy_id}/cancel", response_model=PolicyDetailResponse)

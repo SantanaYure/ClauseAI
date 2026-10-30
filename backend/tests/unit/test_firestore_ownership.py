@@ -41,6 +41,25 @@ async def test_legacy_documents_without_owner_are_invisible() -> None:
     assert await FirestorePolicyRepository(client).list_recent("alice", 10) == []
 
 
+async def test_policy_summaries_skip_occurrence_loading(monkeypatch) -> None:
+    client = FakeFirestoreClient()
+    repository = FirestorePolicyRepository(client)
+    policy = _policy("pol_a", "alice", timedelta(hours=1))
+    policy.occurrences = [occurrence("DO-002", "CONTRACTED")]  # type: ignore[arg-type]
+    await repository.save(policy)
+
+    def fail_if_detail_is_loaded(_policy_id: str) -> None:
+        raise AssertionError("summary listing must not load policy details or occurrences")
+
+    monkeypatch.setattr(repository, "_get", fail_if_detail_is_loaded)
+    summaries = await repository.list_recent_summaries("alice", 10)
+
+    assert len(summaries) == 1
+    assert summaries[0].id == "pol_a"
+    assert summaries[0].documents[0].id == policy.documents[0].id
+    assert not hasattr(summaries[0], "occurrences")
+
+
 async def test_delete_all_for_owner_and_list_expired() -> None:
     client = FakeFirestoreClient()
     policies = FirestorePolicyRepository(client)

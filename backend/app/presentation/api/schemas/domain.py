@@ -17,6 +17,7 @@ from app.domain.entities import (
     Policy,
     PolicyDocument,
     PolicyRef,
+    PolicySummary,
     ProfileResult,
     QualityCheck,
 )
@@ -83,7 +84,7 @@ class PolicySummaryResponse(Dto):
     expires_at: datetime
 
     @classmethod
-    def of(cls, policy: Policy) -> "PolicySummaryResponse":
+    def from_model(cls, policy: Policy | PolicySummary) -> "PolicySummaryResponse":
         return cls(
             id=policy.id,
             insurer=policy.insurer,
@@ -103,7 +104,7 @@ class PolicyDetailResponse(PolicySummaryResponse):
 
     @classmethod
     def of(cls, policy: Policy) -> "PolicyDetailResponse":
-        summary = PolicySummaryResponse.of(policy).model_dump()
+        summary = PolicySummaryResponse.from_model(policy).model_dump()
         return cls(
             **summary,
             occurrences=policy.occurrences,

@@ -12,6 +12,7 @@ from app.domain.entities import (
     KnowledgeBase,
     Policy,
     PolicyDocument,
+    PolicySummary,
 )
 
 
@@ -45,6 +46,10 @@ class PolicyRepository(Protocol):
 
     async def list_recent(self, owner_id: str, limit: int) -> list[Policy]:
         """The owner's policies, newest first (expired ones included)."""
+        ...
+
+    async def list_recent_summaries(self, owner_id: str, limit: int) -> list[PolicySummary]:
+        """The owner's list-view fields, without loading concept occurrences."""
         ...
 
     async def delete(self, policy_id: str) -> None: ...
